@@ -1,9 +1,9 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const basicAuth = require('express-basic-auth');
 const fs = require('node:fs');
 const path = require('node:path');
 const tmp = require('tmp');
+const { createHmac, randomBytes, timingSafeEqual } = require('node:crypto');
 const { execSync } = require('node:child_process');
 
 const { CloudflaredTunnel } = require('./cloudflare-tunnel.js');
@@ -16,19 +16,90 @@ const configpath = '/config/config.json';
 const cloudflaredconfigdir = '/root/.cloudflared';
 const cloudflaredconfigpath = `${cloudflaredconfigdir}/config.yml`;
 const viewpath = path.normalize(__dirname + '/../frontend/dist');
+const authUser = process.env.BASIC_AUTH_USER || 'admin';
+const authPassword = String(process.env.BASIC_AUTH_PASS || '');
+const authEnabled = Boolean(authPassword);
+const authCookieName = 'cloudflared_web_session';
+const authSessionHours = clampNumber(process.env.WEBUI_SESSION_HOURS, 12, 1, 168);
+const authSessionSeconds = authSessionHours * 60 * 60;
+const authSecret = Buffer.from(
+  process.env.WEBUI_SESSION_SECRET || randomBytes(32).toString('hex'),
+  'utf8',
+);
+const failedLogins = new Map();
+const maxLoginAttempts = 5;
+const loginBlockMs = 5 * 60 * 1000;
 
 app.use(bodyParser.json({ limit: '64kb' }));
 app.use(bodyParser.urlencoded({ extended: false, limit: '64kb' }));
 
-if (process.env.BASIC_AUTH_PASS) {
-  const user = process.env.BASIC_AUTH_USER || 'admin';
-  app.use(basicAuth({ users: { [user]: process.env.BASIC_AUTH_PASS }, challenge: true }));
-}
+if (process.env.WEBUI_TRUST_PROXY === 'true') app.set('trust proxy', 1);
+
+app.get('/auth/status', (req, res) => {
+  res.status(200).json({
+    enabled: authEnabled,
+    authenticated: !authEnabled || isAuthenticated(req),
+  });
+});
+
+app.post('/auth/login', (req, res) => {
+  if (!authEnabled) {
+    return res.status(200).json({ ok: true, authenticated: true });
+  }
+
+  const clientKey = getClientKey(req);
+  const now = Date.now();
+  let loginState = failedLogins.get(clientKey);
+  if (loginState?.blockedUntil && loginState.blockedUntil <= now) {
+    failedLogins.delete(clientKey);
+    loginState = undefined;
+  }
+  if (loginState?.blockedUntil > now) {
+    const retryAfter = Math.ceil((loginState.blockedUntil - now) / 1000);
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ message: `登录失败次数过多，请在 ${retryAfter} 秒后重试。` });
+  }
+
+  const username = String(req.body.username || '').slice(0, 200);
+  const password = String(req.body.password || '').slice(0, 500);
+  const credentialsValid = safeEqual(username, authUser) && safeEqual(password, authPassword);
+
+  if (!credentialsValid) {
+    const attempts = (loginState?.attempts || 0) + 1;
+    failedLogins.set(clientKey, {
+      attempts,
+      blockedUntil: attempts >= maxLoginAttempts ? now + loginBlockMs : 0,
+      updatedAt: now,
+    });
+    pruneLoginAttempts(now);
+    const remaining = Math.max(0, maxLoginAttempts - attempts);
+    return res.status(401).json({
+      message: remaining > 0
+        ? `账号或密码不正确，还可以尝试 ${remaining} 次。`
+        : '登录失败次数过多，请在 5 分钟后重试。',
+    });
+  }
+
+  failedLogins.delete(clientKey);
+  setSessionCookie(req, res, createSessionToken(authUser));
+  console.log(`AUTH: 管理员已登录，来源 ${clientKey}`);
+  return res.status(200).json({ ok: true, authenticated: true });
+});
+
+app.post('/auth/logout', (req, res) => {
+  clearSessionCookie(req, res);
+  return res.status(200).json({ ok: true });
+});
 
 app.use(express.static(viewpath));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(viewpath, 'index.html'));
+});
+
+app.use((req, res, next) => {
+  if (!authEnabled || isAuthenticated(req)) return next();
+  return res.status(401).json({ message: '请先登录后再操作。' });
 });
 
 app.get('/config', (req, res) => {
@@ -149,6 +220,7 @@ app.post('/advanced/config/local', (req, res) => {
 app.listen(port, host, () => {
   console.log('STATUS: 中文管理界面已启动');
   console.log(`WEBUI: http://${host}:${port}`);
+  console.log(`AUTH: ${authEnabled ? `登录保护已开启，管理账号 ${authUser}` : '未设置登录密码，登录保护未开启'}`);
   const config = getConfig();
   if (config.start) {
     setTimeout(() => {
@@ -222,4 +294,110 @@ function friendlyError(error) {
   if (message.includes('is not found')) return '容器里没有找到 cloudflared 程序。';
   if (message.includes('Already started')) return '隧道已经在运行。';
   return message;
+}
+
+function clampNumber(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function getClientKey(req) {
+  return String(req.ip || req.socket?.remoteAddress || 'unknown');
+}
+
+function pruneLoginAttempts(now) {
+  const staleBefore = now - loginBlockMs * 2;
+  for (const [key, state] of failedLogins) {
+    if (state.updatedAt < staleBefore) failedLogins.delete(key);
+  }
+  if (failedLogins.size <= 2048) return;
+  const overflow = failedLogins.size - 2048;
+  for (const key of Array.from(failedLogins.keys()).slice(0, overflow)) {
+    failedLogins.delete(key);
+  }
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left), 'utf8');
+  const rightBuffer = Buffer.from(String(right), 'utf8');
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function parseCookies(header) {
+  return String(header || '')
+    .split(';')
+    .map(item => item.trim())
+    .filter(Boolean)
+    .reduce((cookies, item) => {
+      const separator = item.indexOf('=');
+      if (separator === -1) return cookies;
+      const name = item.slice(0, separator);
+      const value = item.slice(separator + 1);
+      try {
+        cookies[name] = decodeURIComponent(value);
+      } catch (_error) {
+        cookies[name] = value;
+      }
+      return cookies;
+    }, {});
+}
+
+function createSessionToken(username) {
+  const payload = Buffer.from(JSON.stringify({
+    username,
+    expiresAt: Date.now() + authSessionSeconds * 1000,
+    nonce: randomBytes(16).toString('hex'),
+  })).toString('base64url');
+  const signature = createHmac('sha256', authSecret).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+function verifySessionToken(token) {
+  try {
+    const [payload, signature] = String(token || '').split('.');
+    if (!payload || !signature) return false;
+    const expected = createHmac('sha256', authSecret).update(payload).digest('base64url');
+    if (!safeEqual(signature, expected)) return false;
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return session.username === authUser && Number(session.expiresAt) > Date.now();
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isAuthenticated(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  return verifySessionToken(cookies[authCookieName]);
+}
+
+function shouldUseSecureCookie(req) {
+  if (process.env.WEBUI_COOKIE_SECURE === 'true') return true;
+  if (process.env.WEBUI_COOKIE_SECURE === 'false') return false;
+  return req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+}
+
+function setSessionCookie(req, res, token) {
+  const attributes = [
+    `${authCookieName}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${authSessionSeconds}`,
+  ];
+  if (shouldUseSecureCookie(req)) attributes.push('Secure');
+  res.setHeader('Set-Cookie', attributes.join('; '));
+}
+
+function clearSessionCookie(req, res) {
+  const attributes = [
+    `${authCookieName}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    'Max-Age=0',
+  ];
+  if (shouldUseSecureCookie(req)) attributes.push('Secure');
+  res.setHeader('Set-Cookie', attributes.join('; '));
 }

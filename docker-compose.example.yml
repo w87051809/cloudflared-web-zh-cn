@@ -1,12 +1,17 @@
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.5
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.6
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
     environment:
       WEBUI_HOST: 0.0.0.0
       WEBUI_PORT: 14333
+      BASIC_AUTH_USER: ${CLOUDFLARED_WEB_USER:-admin}
+      BASIC_AUTH_PASS: ${CLOUDFLARED_WEB_PASSWORD:?请先在 .env 设置登录密码}
+      WEBUI_SESSION_SECRET: ${CLOUDFLARED_WEB_SESSION_SECRET:?请先在 .env 设置会话密钥}
+      WEBUI_SESSION_HOURS: 12
+      WEBUI_COOKIE_SECURE: auto
       PROTOCOL: http2
       UI_LANGUAGE: zh-CN
     dns:

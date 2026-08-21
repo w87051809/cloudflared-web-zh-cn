@@ -3,7 +3,109 @@
     <div class="ambient ambient-one"></div>
     <div class="ambient ambient-two"></div>
 
-    <main class="console-panel">
+    <main v-if="authChecking" class="auth-loading-panel" aria-live="polite">
+      <div class="brand-mark" aria-hidden="true">
+        <Cloud :size="30" :stroke-width="2.2" />
+      </div>
+      <LoaderCircle class="spin" :size="22" />
+      <span>正在检查登录状态</span>
+    </main>
+
+    <main v-else-if="authEnabled && !authenticated" class="login-panel">
+      <section class="login-brand-panel">
+        <div class="login-brand-heading">
+          <div class="brand-mark login-brand-mark" aria-hidden="true">
+            <Cloud :size="31" :stroke-width="2.2" />
+          </div>
+          <div>
+            <p class="eyebrow">ISTOREOS · 安全登录</p>
+            <h1>Cloudflare 隧道管理</h1>
+          </div>
+        </div>
+
+        <p class="login-intro">完成身份验证后，可以查看隧道状态、保存连接令牌并控制服务启停。</p>
+
+        <div class="login-security-card">
+          <ShieldCheck :size="22" />
+          <div>
+            <strong>本机安全验证</strong>
+            <span>账号和密码仅由当前路由器验证，不会发送至 Cloudflare。</span>
+          </div>
+        </div>
+
+        <ul class="login-points">
+          <li><span></span>未登录时，所有管理接口都会被拦截</li>
+          <li><span></span>连续输错 5 次，将暂停登录 5 分钟</li>
+          <li><span></span>登录状态到期后需要重新验证</li>
+        </ul>
+      </section>
+
+      <section class="login-form-panel">
+        <div class="login-form-heading">
+          <div class="section-icon"><LockKeyhole :size="20" /></div>
+          <div>
+            <h2>登录管理后台</h2>
+            <p>请输入路由器管理员设置的账号和密码。</p>
+          </div>
+        </div>
+
+        <form class="login-form" @submit.prevent="login">
+          <label class="field-label" for="login-user">管理账号</label>
+          <div class="login-field">
+            <UserRound :size="18" />
+            <input
+              id="login-user"
+              v-model="loginUser"
+              type="text"
+              maxlength="200"
+              autocomplete="username"
+              placeholder="请输入管理账号"
+              :disabled="loginBusy"
+              autofocus
+            />
+          </div>
+
+          <label class="field-label login-password-label" for="login-password">登录密码</label>
+          <div class="login-field">
+            <LockKeyhole :size="18" />
+            <input
+              id="login-password"
+              v-model="loginPassword"
+              :type="showLoginPassword ? 'text' : 'password'"
+              maxlength="500"
+              autocomplete="current-password"
+              placeholder="请输入登录密码"
+              :disabled="loginBusy"
+            />
+            <button
+              type="button"
+              class="icon-button login-eye-button"
+              :title="showLoginPassword ? '隐藏密码' : '显示密码'"
+              :aria-label="showLoginPassword ? '隐藏密码' : '显示密码'"
+              @click="showLoginPassword = !showLoginPassword"
+            >
+              <EyeOff v-if="showLoginPassword" :size="19" />
+              <Eye v-else :size="19" />
+            </button>
+          </div>
+
+          <div v-if="loginError" class="notice notice-error login-notice" role="alert">
+            <CircleAlert :size="18" />
+            <span>{{ loginError }}</span>
+          </div>
+
+          <button class="button button-primary login-button" type="submit" :disabled="loginBusy || !loginUser || !loginPassword">
+            <LoaderCircle v-if="loginBusy" class="spin" :size="19" />
+            <LogIn v-else :size="19" />
+            {{ loginBusy ? '正在验证' : '进入管理后台' }}
+          </button>
+        </form>
+
+        <p class="login-footer">中文定制版 2026.8.2-zh-cn.6 · 仅限授权人员访问</p>
+      </section>
+    </main>
+
+    <main v-else class="console-panel">
       <header class="topbar">
         <div class="brand-block">
           <div class="brand-mark" aria-hidden="true">
@@ -16,9 +118,16 @@
           </div>
         </div>
 
-        <div class="status-pill" :class="statusClass" aria-live="polite">
-          <span class="status-dot"></span>
-          {{ statusText }}
+        <div class="topbar-actions">
+          <div class="status-pill" :class="statusClass" aria-live="polite">
+            <span class="status-dot"></span>
+            {{ statusText }}
+          </div>
+          <button v-if="authEnabled" type="button" class="logout-button" :disabled="logoutBusy" @click="logout">
+            <LoaderCircle v-if="logoutBusy" class="spin" :size="16" />
+            <LogOut v-else :size="16" />
+            退出
+          </button>
         </div>
       </header>
 
@@ -98,7 +207,7 @@
             <div class="section-icon"><Gauge :size="19" /></div>
             <div>
               <h2>连接详情</h2>
-              <p>这里显示当前实际生效的运行参数。</p>
+              <p>显示当前服务实际使用的运行参数。</p>
             </div>
           </div>
 
@@ -140,20 +249,20 @@
         <div class="guide-heading">
           <BookOpen :size="20" />
           <div>
-            <h2>怎么使用</h2>
-            <p>三步完成配置，令牌改变时需要先保存，再启动隧道。</p>
+            <h2>使用指南</h2>
+            <p>按照以下步骤完成配置；令牌变更后需要先保存，再启动隧道。</p>
           </div>
         </div>
         <ol class="steps">
           <li><span>1</span><p><strong>创建隧道</strong>在 Zero Trust 控制台新建一个远程管理隧道。</p></li>
           <li><span>2</span><p><strong>粘贴令牌</strong>复制连接器令牌或完整安装命令，然后点“保存令牌”。</p></li>
-          <li><span>3</span><p><strong>启动服务</strong>点“启动隧道”，状态变成“正在运行”就成功了。</p></li>
+          <li><span>3</span><p><strong>启动服务</strong>选择“启动隧道”，状态显示“正在运行”即表示启动成功。</p></li>
         </ol>
       </section>
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 2026.8.2-zh-cn.5</span>
+          <span class="build-tag">中文定制版 2026.8.2-zh-cn.6</span>
           <span v-if="updateInfo.update" class="update-tip">官方有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">
@@ -163,7 +272,7 @@
           <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/" target="_blank" rel="noreferrer">
             新建隧道 <ExternalLink :size="14" />
           </a>
-          <a href="https://github.com/WisdomSky/Cloudflared-web" target="_blank" rel="noreferrer">
+          <a href="https://github.com/w87051809/cloudflared-web-zh-cn" target="_blank" rel="noreferrer">
             项目主页 <ExternalLink :size="14" />
           </a>
         </nav>
@@ -185,16 +294,29 @@ import {
   Gauge,
   KeyRound,
   LoaderCircle,
+  LockKeyhole,
+  LogIn,
+  LogOut,
   Play,
   RefreshCw,
   Save,
   ShieldCheck,
   Square,
-} from 'lucide-vue-next'
+  UserRound,
+} from '@lucide/vue'
 
 type NoticeType = 'success' | 'error'
 
 const endpoint = ''
+const authChecking = ref(true)
+const authEnabled = ref(false)
+const authenticated = ref(false)
+const loginUser = ref('admin')
+const loginPassword = ref('')
+const loginBusy = ref(false)
+const logoutBusy = ref(false)
+const loginError = ref('')
+const showLoginPassword = ref(false)
 const token = ref('')
 const savedTokenPresent = ref(false)
 const version = ref('')
@@ -240,7 +362,7 @@ const versionNumber = computed(() => version.value.match(/version\s+([^\s]+)/i)?
 const protocolLabel = computed(() => ({ auto: '自动选择', http2: 'HTTP/2', quic: 'QUIC' }[details.protocol] || details.protocol))
 const edgeIpLabel = computed(() => ({ auto: '自动选择', '4': '仅 IPv4', '6': '仅 IPv6' }[details.edge_ip_version] || details.edge_ip_version))
 
-onBeforeMount(refreshAll)
+onBeforeMount(bootstrap)
 
 function showNotice(type: NoticeType, text: string) {
   notice.type = type
@@ -255,9 +377,79 @@ async function requestJson(path: string, options?: RequestInit) {
     try {
       message = JSON.parse(raw).message || raw
     } catch (_error) {}
+    if (response.status === 401 && !path.startsWith('/auth/')) {
+      authenticated.value = false
+      loginPassword.value = ''
+      loginError.value = '登录状态已经失效，请重新登录。'
+    }
     throw new Error(message || `请求失败（${response.status}）`)
   }
   return response.json()
+}
+
+async function requestText(path: string) {
+  const response = await fetch(endpoint + path)
+  if (!response.ok) {
+    if (response.status === 401) {
+      authenticated.value = false
+      loginPassword.value = ''
+      loginError.value = '登录状态已经失效，请重新登录。'
+    }
+    throw new Error(response.status === 401 ? '请重新登录。' : '读取核心版本失败')
+  }
+  return response.text()
+}
+
+async function bootstrap() {
+  try {
+    const response = await fetch(endpoint + '/auth/status')
+    if (!response.ok) throw new Error('无法读取登录状态。')
+    const status = await response.json()
+    authEnabled.value = Boolean(status.enabled)
+    authenticated.value = Boolean(status.authenticated)
+    if (authenticated.value) await refreshAll()
+  } catch (error) {
+    loginError.value = error instanceof Error ? error.message : '无法连接管理服务。'
+  } finally {
+    authChecking.value = false
+  }
+}
+
+async function login() {
+  loginBusy.value = true
+  loginError.value = ''
+  try {
+    await requestJson('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: loginUser.value, password: loginPassword.value }),
+    })
+    authenticated.value = true
+    loginPassword.value = ''
+    showLoginPassword.value = false
+    loading.value = true
+    notice.text = ''
+    await refreshAll()
+  } catch (error) {
+    loginError.value = error instanceof Error ? error.message : '登录失败，请重新尝试。'
+  } finally {
+    loginBusy.value = false
+  }
+}
+
+async function logout() {
+  logoutBusy.value = true
+  try {
+    await requestJson('/auth/logout', { method: 'POST' })
+    authenticated.value = false
+    loginPassword.value = ''
+    loginError.value = ''
+    notice.text = ''
+  } catch (error) {
+    showNotice('error', error instanceof Error ? error.message : '退出登录失败。')
+  } finally {
+    logoutBusy.value = false
+  }
 }
 
 async function loadDetails() {
@@ -271,10 +463,7 @@ async function refreshAll() {
   try {
     const [configData, versionText, updateData] = await Promise.all([
       requestJson('/config'),
-      fetch(endpoint + '/version').then(async response => {
-        if (!response.ok) throw new Error('读取核心版本失败')
-        return response.text()
-      }),
+      requestText('/version'),
       requestJson('/new-version').catch(() => ({ latest_version: '', update: false })),
     ])
     token.value = ''
@@ -386,6 +575,95 @@ async function toggleTunnel() {
   box-shadow: 0 32px 100px rgba(0, 0, 0, .42);
   animation: panel-in .5s ease-out both;
 }
+.auth-loading-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(420px, 100%);
+  min-height: 160px;
+  margin: calc(50vh - 128px) auto 0;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #dce8f5;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 22px;
+  background: rgba(12, 29, 51, .92);
+  box-shadow: 0 28px 80px rgba(0,0,0,.38);
+  font-size: 14px;
+  font-weight: 800;
+}
+.login-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(960px, 100%);
+  min-height: 600px;
+  margin: 0 auto;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.05fr) minmax(390px, .95fr);
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 26px;
+  background: #f7f9fc;
+  box-shadow: 0 32px 100px rgba(0,0,0,.44);
+  animation: panel-in .5s ease-out both;
+}
+.login-brand-panel {
+  position: relative;
+  padding: 52px 46px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 90% 8%, rgba(246,130,31,.3), transparent 32%),
+    linear-gradient(145deg, #0b1d33, #102c4b 66%, #173d64);
+}
+.login-brand-panel::after {
+  content: "";
+  position: absolute;
+  right: -90px;
+  bottom: -120px;
+  width: 300px;
+  height: 300px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 50%;
+  box-shadow: 0 0 0 42px rgba(255,255,255,.025), 0 0 0 84px rgba(255,255,255,.018);
+}
+.login-brand-heading { position: relative; z-index: 1; display: flex; align-items: center; gap: 18px; }
+.login-brand-mark { width: 62px; height: 62px; border-radius: 19px; }
+.login-brand-heading h1 { font-size: clamp(26px, 3vw, 35px); }
+.login-intro { position: relative; z-index: 1; max-width: 430px; margin: 34px 0 0; color: #c3d2e2; font-size: 15px; line-height: 1.8; }
+.login-security-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-top: 38px;
+  padding: 17px 18px;
+  color: #dce9f6;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 15px;
+  background: rgba(255,255,255,.07);
+}
+.login-security-card > svg { flex: 0 0 auto; margin-top: 1px; color: #54d99a; }
+.login-security-card strong { display: block; margin-bottom: 5px; color: #fff; font-size: 14px; }
+.login-security-card span { display: block; color: #acc1d7; font-size: 12px; line-height: 1.65; }
+.login-points { position: relative; z-index: 1; display: grid; gap: 13px; margin: 28px 0 0; padding: 0; color: #b8cadc; list-style: none; font-size: 12px; }
+.login-points li { display: flex; align-items: center; gap: 10px; }
+.login-points li > span { width: 7px; height: 7px; border-radius: 50%; background: #f6821f; box-shadow: 0 0 0 4px rgba(246,130,31,.12); }
+.login-form-panel { display: flex; padding: 52px 46px 32px; flex-direction: column; justify-content: center; background: linear-gradient(180deg, #fff, #f6f8fb); }
+.login-form-heading { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 30px; }
+.login-form-heading h2 { margin: 1px 0 0; color: #142337; font-size: 21px; letter-spacing: -.02em; }
+.login-form-heading p { margin: 6px 0 0; color: #718096; font-size: 12px; line-height: 1.6; }
+.login-form { width: 100%; }
+.login-field { display: flex; align-items: center; border: 1px solid #ccd7e3; border-radius: 12px; background: #fff; transition: .2s ease; }
+.login-field:focus-within { border-color: #f6821f; box-shadow: 0 0 0 4px rgba(246,130,31,.12); }
+.login-field > svg { flex: 0 0 auto; margin-left: 14px; color: #718096; }
+.login-field input { width: 100%; min-width: 0; padding: 13px 12px; color: #1d2b3d; border: 0; outline: 0; background: transparent; font-size: 13px; }
+.login-password-label { margin-top: 20px; }
+.login-eye-button { flex: 0 0 auto; }
+.login-notice { margin-top: 17px; }
+.login-button { width: 100%; min-height: 48px; margin-top: 24px; font-size: 14px; }
+.login-footer { margin: 32px 0 0; color: #8a98a9; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; text-align: center; }
 .topbar {
   display: flex;
   align-items: center;
@@ -395,6 +673,23 @@ async function toggleTunnel() {
   color: #fff;
   background: linear-gradient(120deg, #0c1d33, #102946 70%, #17395e);
 }
+.topbar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+.logout-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  color: #d9e6f4;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 999px;
+  background: rgba(255,255,255,.07);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.logout-button:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.13); }
+.logout-button:disabled { cursor: wait; opacity: .6; }
 .brand-block { display: flex; align-items: center; gap: 18px; }
 .brand-mark {
   display: grid;
@@ -492,6 +787,12 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
 
 @media (max-width: 820px) {
   .app-shell { padding: 20px 12px; }
+  .login-panel { grid-template-columns: 1fr; }
+  .login-brand-panel { padding: 34px 30px; }
+  .login-intro { margin-top: 24px; }
+  .login-security-card { margin-top: 24px; }
+  .login-points { display: none; }
+  .login-form-panel { padding: 38px 30px 30px; }
   .topbar { align-items: flex-start; padding: 24px 20px; }
   .brand-mark { width: 48px; height: 48px; border-radius: 14px; }
   .subtitle { display: none; }
@@ -504,8 +805,16 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
 }
 @media (max-width: 520px) {
   .app-shell { padding: 0; }
+  .auth-loading-panel { width: 100%; min-height: 100vh; margin: 0; border: 0; border-radius: 0; }
+  .login-panel { min-height: 100vh; border: 0; border-radius: 0; }
+  .login-brand-panel { padding: 28px 22px; }
+  .login-brand-mark { width: 50px; height: 50px; border-radius: 15px; }
+  .login-intro { font-size: 13px; }
+  .login-security-card { padding: 14px; }
+  .login-form-panel { padding: 32px 22px 24px; justify-content: flex-start; }
   .console-panel { min-height: 100vh; border: 0; border-radius: 0; }
   .topbar { flex-direction: column; gap: 16px; }
+  .topbar-actions { width: 100%; justify-content: space-between; }
   .brand-block { align-items: flex-start; gap: 12px; }
   .eyebrow { font-size: 9px; }
   h1 { font-size: 25px; }

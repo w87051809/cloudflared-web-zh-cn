@@ -1,4 +1,14 @@
-FROM node:18-bookworm-slim
+FROM node:22-bookworm-slim AS frontend-builder
+
+WORKDIR /build
+
+COPY app/frontend/package.json app/frontend/package-lock.json ./
+RUN npm ci
+
+COPY app/frontend/ ./
+RUN npm run build
+
+FROM node:22-bookworm-slim
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -20,12 +30,12 @@ USER root
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.5" \
+      org.opencontainers.image.version="2026.8.2-zh-cn.6" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0"
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean
 
 RUN if [ "$TARGETVARIANT" = "v7" ]; then \
         CLOUDFLARED_PKG="cloudflared-$TARGETOS-${TARGETARCH}hf.deb"; \
@@ -47,10 +57,10 @@ RUN if [ "$TARGETVARIANT" = "v7" ]; then \
 VOLUME /config
 VOLUME /root/.cloudflared
 
-COPY app/backend /var/app/backend
-COPY app/frontend /var/app/frontend
+COPY app/backend/package.json app/backend/package-lock.json /var/app/backend/
+RUN cd /var/app/backend && npm ci --omit=dev
 
-RUN cd /var/app/frontend && npm install && npm run build
-RUN cd /var/app/backend && npm install
+COPY app/backend/ /var/app/backend/
+COPY --from=frontend-builder /build/dist /var/app/frontend/dist
 
 ENTRYPOINT ["node", "/var/app/backend/app.js"]
