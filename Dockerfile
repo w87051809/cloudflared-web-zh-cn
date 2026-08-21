@@ -30,7 +30,7 @@ USER root
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.6" \
+      org.opencontainers.image.version="2026.8.2-zh-cn.7" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0"
 

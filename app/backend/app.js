@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const fs = require('node:fs');
 const path = require('node:path');
 const tmp = require('tmp');
-const { createHmac, randomBytes, timingSafeEqual } = require('node:crypto');
+const { createHmac, randomBytes, scryptSync, timingSafeEqual } = require('node:crypto');
 const { execSync } = require('node:child_process');
 
 const { CloudflaredTunnel } = require('./cloudflare-tunnel.js');
@@ -12,13 +12,16 @@ const app = express();
 const tunnel = new CloudflaredTunnel();
 const port = process.env.WEBUI_PORT || 14333;
 const host = process.env.WEBUI_HOST || '0.0.0.0';
-const configpath = '/config/config.json';
+const configdir = process.env.CONFIG_DIR || '/config';
+const configpath = path.join(configdir, 'config.json');
+const authConfigPath = path.join(configdir, 'auth.json');
 const cloudflaredconfigdir = '/root/.cloudflared';
 const cloudflaredconfigpath = `${cloudflaredconfigdir}/config.yml`;
 const viewpath = path.normalize(__dirname + '/../frontend/dist');
-const authUser = process.env.BASIC_AUTH_USER || 'admin';
-const authPassword = String(process.env.BASIC_AUTH_PASS || '');
-const authEnabled = Boolean(authPassword);
+const defaultAuthUser = 'admin';
+const defaultAuthPassword = '123456789';
+const initialAuthUser = String(process.env.BASIC_AUTH_USER || defaultAuthUser);
+const initialAuthPassword = String(process.env.BASIC_AUTH_PASS || defaultAuthPassword);
 const authCookieName = 'cloudflared_web_session';
 const authSessionHours = clampNumber(process.env.WEBUI_SESSION_HOURS, 12, 1, 168);
 const authSessionSeconds = authSessionHours * 60 * 60;
@@ -29,6 +32,7 @@ const authSecret = Buffer.from(
 const failedLogins = new Map();
 const maxLoginAttempts = 5;
 const loginBlockMs = 5 * 60 * 1000;
+let authConfig = loadAuthConfig();
 
 app.use(bodyParser.json({ limit: '64kb' }));
 app.use(bodyParser.urlencoded({ extended: false, limit: '64kb' }));
@@ -37,16 +41,12 @@ if (process.env.WEBUI_TRUST_PROXY === 'true') app.set('trust proxy', 1);
 
 app.get('/auth/status', (req, res) => {
   res.status(200).json({
-    enabled: authEnabled,
-    authenticated: !authEnabled || isAuthenticated(req),
+    enabled: true,
+    authenticated: isAuthenticated(req),
   });
 });
 
 app.post('/auth/login', (req, res) => {
-  if (!authEnabled) {
-    return res.status(200).json({ ok: true, authenticated: true });
-  }
-
   const clientKey = getClientKey(req);
   const now = Date.now();
   let loginState = failedLogins.get(clientKey);
@@ -62,7 +62,7 @@ app.post('/auth/login', (req, res) => {
 
   const username = String(req.body.username || '').slice(0, 200);
   const password = String(req.body.password || '').slice(0, 500);
-  const credentialsValid = safeEqual(username, authUser) && safeEqual(password, authPassword);
+  const credentialsValid = safeEqual(username, authConfig.username) && verifyPassword(password, authConfig);
 
   if (!credentialsValid) {
     const attempts = (loginState?.attempts || 0) + 1;
@@ -81,7 +81,7 @@ app.post('/auth/login', (req, res) => {
   }
 
   failedLogins.delete(clientKey);
-  setSessionCookie(req, res, createSessionToken(authUser));
+  setSessionCookie(req, res, createSessionToken(authConfig.username, authConfig.revision));
   console.log(`AUTH: 管理员已登录，来源 ${clientKey}`);
   return res.status(200).json({ ok: true, authenticated: true });
 });
@@ -98,8 +98,43 @@ app.get('/', (req, res) => {
 });
 
 app.use((req, res, next) => {
-  if (!authEnabled || isAuthenticated(req)) return next();
+  if (isAuthenticated(req)) return next();
   return res.status(401).json({ message: '请先登录后再操作。' });
+});
+
+app.get('/auth/profile', (req, res) => {
+  res.status(200).json({
+    username: authConfig.username,
+    default_credentials: Boolean(authConfig.defaultCredentials),
+  });
+});
+
+app.post('/auth/credentials', (req, res) => {
+  const currentPassword = String(req.body.current_password || '').slice(0, 500);
+  const username = String(req.body.username || '').trim().slice(0, 200);
+  const password = String(req.body.password || '').slice(0, 500);
+
+  if (!verifyPassword(currentPassword, authConfig)) {
+    return res.status(403).json({ message: '当前密码不正确。' });
+  }
+  if (!isValidUsername(username)) {
+    return res.status(400).json({ message: '管理账号需要使用 3 至 64 个字符，不能包含空格。' });
+  }
+  if (password.length < 8 || password.length > 128) {
+    return res.status(400).json({ message: '新密码需要使用 8 至 128 个字符。' });
+  }
+
+  const nextConfig = createAuthConfig(username, password);
+  saveAuthConfig(nextConfig);
+  authConfig = nextConfig;
+  failedLogins.clear();
+  setSessionCookie(req, res, createSessionToken(authConfig.username, authConfig.revision));
+  console.log('AUTH: 管理登录信息已更新，旧登录会话已经失效。');
+  return res.status(200).json({
+    ok: true,
+    username: authConfig.username,
+    default_credentials: Boolean(authConfig.defaultCredentials),
+  });
 });
 
 app.get('/config', (req, res) => {
@@ -220,7 +255,7 @@ app.post('/advanced/config/local', (req, res) => {
 app.listen(port, host, () => {
   console.log('STATUS: 中文管理界面已启动');
   console.log(`WEBUI: http://${host}:${port}`);
-  console.log(`AUTH: ${authEnabled ? `登录保护已开启，管理账号 ${authUser}` : '未设置登录密码，登录保护未开启'}`);
+  console.log(`AUTH: 登录保护已开启，管理账号 ${authConfig.username}`);
   const config = getConfig();
   if (config.start) {
     setTimeout(() => {
@@ -296,6 +331,69 @@ function friendlyError(error) {
   return message;
 }
 
+function loadAuthConfig() {
+  try {
+    const stored = JSON.parse(fs.readFileSync(authConfigPath, 'utf8'));
+    if (
+      stored.version !== 1
+      || !isValidUsername(stored.username)
+      || !/^[a-f0-9]{32}$/i.test(String(stored.passwordSalt || ''))
+      || !/^[a-f0-9]{128}$/i.test(String(stored.passwordHash || ''))
+      || !/^[a-f0-9]{32}$/i.test(String(stored.revision || ''))
+    ) {
+      throw new Error('登录配置文件格式不正确。');
+    }
+    return stored;
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw new Error(`无法读取登录配置：${error.message}`);
+    }
+    const created = createAuthConfig(initialAuthUser, initialAuthPassword);
+    saveAuthConfig(created);
+    return created;
+  }
+}
+
+function createAuthConfig(username, password) {
+  const passwordSalt = randomBytes(16).toString('hex');
+  return {
+    version: 1,
+    username,
+    passwordSalt,
+    passwordHash: scryptSync(password, passwordSalt, 64).toString('hex'),
+    revision: randomBytes(16).toString('hex'),
+    defaultCredentials: username === defaultAuthUser && password === defaultAuthPassword,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function saveAuthConfig(config) {
+  if (!fs.existsSync(configdir)) {
+    fs.mkdirSync(configdir, { recursive: true });
+  }
+  const temporaryPath = `${authConfigPath}.tmp-${process.pid}`;
+  fs.writeFileSync(temporaryPath, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+  fs.renameSync(temporaryPath, authConfigPath);
+  fs.chmodSync(authConfigPath, 0o600);
+}
+
+function verifyPassword(password, config) {
+  try {
+    const expected = Buffer.from(config.passwordHash, 'hex');
+    const actual = scryptSync(String(password), config.passwordSalt, expected.length);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isValidUsername(username) {
+  return typeof username === 'string'
+    && username.length >= 3
+    && username.length <= 64
+    && !/[\s\x00-\x1f\x7f]/.test(username);
+}
+
 function clampNumber(value, fallback, min, max) {
   const parsed = Number.parseInt(String(value || ''), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -344,9 +442,10 @@ function parseCookies(header) {
     }, {});
 }
 
-function createSessionToken(username) {
+function createSessionToken(username, revision) {
   const payload = Buffer.from(JSON.stringify({
     username,
+    revision,
     expiresAt: Date.now() + authSessionSeconds * 1000,
     nonce: randomBytes(16).toString('hex'),
   })).toString('base64url');
@@ -361,7 +460,9 @@ function verifySessionToken(token) {
     const expected = createHmac('sha256', authSecret).update(payload).digest('base64url');
     if (!safeEqual(signature, expected)) return false;
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return session.username === authUser && Number(session.expiresAt) > Date.now();
+    return session.username === authConfig.username
+      && session.revision === authConfig.revision
+      && Number(session.expiresAt) > Date.now();
   } catch (_error) {
     return false;
   }

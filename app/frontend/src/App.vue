@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'login-shell': !authChecking && authEnabled && !authenticated }">
     <div class="ambient ambient-one"></div>
     <div class="ambient ambient-two"></div>
 
@@ -101,7 +101,7 @@
           </button>
         </form>
 
-        <p class="login-footer">中文定制版 2026.8.2-zh-cn.6 · 仅限授权人员访问</p>
+        <p class="login-footer">中文定制版 2026.8.2-zh-cn.7 · 仅限授权人员访问</p>
       </section>
     </main>
 
@@ -245,6 +245,90 @@
         </aside>
       </section>
 
+      <section v-if="authEnabled" class="account-panel surface">
+        <div class="account-heading">
+          <div class="section-title account-title">
+            <div class="section-icon"><UserRound :size="19" /></div>
+            <div>
+              <h2>登录设置</h2>
+              <p>修改管理后台的登录账号和密码，保存后立即生效。</p>
+            </div>
+          </div>
+          <span v-if="authProfile.default_credentials" class="default-credential-badge">当前使用默认密码</span>
+        </div>
+
+        <div v-if="authProfile.default_credentials" class="default-credential-note">
+          <ShieldCheck :size="18" />
+          <span>首次登录后建议在这里更换账号和密码。新密码只保存加密结果。</span>
+        </div>
+
+        <form class="credential-form" @submit.prevent="changeCredentials">
+          <div class="credential-fields">
+            <label>
+              <span class="field-label">当前密码</span>
+              <input
+                v-model="currentPassword"
+                type="password"
+                maxlength="128"
+                autocomplete="current-password"
+                placeholder="请输入当前密码"
+                :disabled="credentialBusy"
+              />
+            </label>
+            <label>
+              <span class="field-label">新管理账号</span>
+              <input
+                v-model="newUsername"
+                type="text"
+                maxlength="64"
+                autocomplete="username"
+                placeholder="请输入新管理账号"
+                :disabled="credentialBusy"
+              />
+            </label>
+            <label>
+              <span class="field-label">新密码</span>
+              <input
+                v-model="newPassword"
+                type="password"
+                maxlength="128"
+                autocomplete="new-password"
+                placeholder="至少 8 个字符"
+                :disabled="credentialBusy"
+              />
+            </label>
+            <label>
+              <span class="field-label">确认新密码</span>
+              <input
+                v-model="confirmPassword"
+                type="password"
+                maxlength="128"
+                autocomplete="new-password"
+                placeholder="请再次输入新密码"
+                :disabled="credentialBusy"
+              />
+            </label>
+          </div>
+
+          <div class="credential-actions">
+            <div v-if="credentialNotice.text" class="notice credential-notice" :class="`notice-${credentialNotice.type}`" role="status">
+              <CircleCheck v-if="credentialNotice.type === 'success'" :size="18" />
+              <CircleAlert v-else :size="18" />
+              <span>{{ credentialNotice.text }}</span>
+            </div>
+            <button
+              type="submit"
+              class="button button-primary credential-button"
+              :disabled="credentialBusy || !currentPassword || !newUsername || !newPassword || !confirmPassword"
+            >
+              <LoaderCircle v-if="credentialBusy" class="spin" :size="18" />
+              <Save v-else :size="17" />
+              {{ credentialBusy ? '正在保存' : '保存登录信息' }}
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section class="guide-panel">
         <div class="guide-heading">
           <BookOpen :size="20" />
@@ -262,7 +346,7 @@
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 2026.8.2-zh-cn.6</span>
+          <span class="build-tag">中文定制版 2026.8.2-zh-cn.7</span>
           <span v-if="updateInfo.update" class="update-tip">官方有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">
@@ -311,7 +395,7 @@ const endpoint = ''
 const authChecking = ref(true)
 const authEnabled = ref(false)
 const authenticated = ref(false)
-const loginUser = ref('admin')
+const loginUser = ref('')
 const loginPassword = ref('')
 const loginBusy = ref(false)
 const logoutBusy = ref(false)
@@ -325,6 +409,13 @@ const loading = ref(true)
 const busy = ref(false)
 const refreshing = ref(false)
 const notice = reactive<{ type: NoticeType; text: string }>({ type: 'success', text: '' })
+const authProfile = reactive({ username: '', default_credentials: false })
+const currentPassword = ref('')
+const newUsername = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const credentialBusy = ref(false)
+const credentialNotice = reactive<{ type: NoticeType; text: string }>({ type: 'success', text: '' })
 const config = reactive({ start: false })
 const details = reactive({
   running: false,
@@ -377,8 +468,9 @@ async function requestJson(path: string, options?: RequestInit) {
     try {
       message = JSON.parse(raw).message || raw
     } catch (_error) {}
-    if (response.status === 401 && !path.startsWith('/auth/')) {
+    if (response.status === 401 && path !== '/auth/login') {
       authenticated.value = false
+      loginUser.value = ''
       loginPassword.value = ''
       loginError.value = '登录状态已经失效，请重新登录。'
     }
@@ -425,6 +517,7 @@ async function login() {
       body: JSON.stringify({ username: loginUser.value, password: loginPassword.value }),
     })
     authenticated.value = true
+    loginUser.value = ''
     loginPassword.value = ''
     showLoginPassword.value = false
     loading.value = true
@@ -442,6 +535,7 @@ async function logout() {
   try {
     await requestJson('/auth/logout', { method: 'POST' })
     authenticated.value = false
+    loginUser.value = ''
     loginPassword.value = ''
     loginError.value = ''
     notice.text = ''
@@ -461,22 +555,70 @@ async function loadDetails() {
 async function refreshAll() {
   refreshing.value = true
   try {
-    const [configData, versionText, updateData] = await Promise.all([
+    const [configData, versionText, updateData, profileData] = await Promise.all([
       requestJson('/config'),
       requestText('/version'),
       requestJson('/new-version').catch(() => ({ latest_version: '', update: false })),
+      requestJson('/auth/profile'),
     ])
     token.value = ''
     savedTokenPresent.value = Boolean(configData.token_set)
     version.value = versionText.trim()
     updateInfo.latest_version = updateData.latest_version || ''
     updateInfo.update = Boolean(updateData.update)
+    authProfile.username = profileData.username || ''
+    authProfile.default_credentials = Boolean(profileData.default_credentials)
+    if (!newUsername.value) newUsername.value = authProfile.username
     await loadDetails()
   } catch (error) {
     showNotice('error', error instanceof Error ? error.message : '读取服务状态失败')
   } finally {
     loading.value = false
     refreshing.value = false
+  }
+}
+
+async function changeCredentials() {
+  credentialNotice.text = ''
+  if (newUsername.value.trim().length < 3) {
+    credentialNotice.type = 'error'
+    credentialNotice.text = '新管理账号至少需要 3 个字符。'
+    return
+  }
+  if (newPassword.value.length < 8) {
+    credentialNotice.type = 'error'
+    credentialNotice.text = '新密码至少需要 8 个字符。'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    credentialNotice.type = 'error'
+    credentialNotice.text = '两次输入的新密码不一致。'
+    return
+  }
+
+  credentialBusy.value = true
+  try {
+    const profile = await requestJson('/auth/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: currentPassword.value,
+        username: newUsername.value.trim(),
+        password: newPassword.value,
+      }),
+    })
+    authProfile.username = profile.username
+    authProfile.default_credentials = Boolean(profile.default_credentials)
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    credentialNotice.type = 'success'
+    credentialNotice.text = '登录账号和密码已经更新，下次登录请使用新信息。'
+  } catch (error) {
+    credentialNotice.type = 'error'
+    credentialNotice.text = error instanceof Error ? error.message : '保存登录信息失败。'
+  } finally {
+    credentialBusy.value = false
   }
 }
 
@@ -559,6 +701,7 @@ async function toggleTunnel() {
   background-image: radial-gradient(rgba(255,255,255,.22) .7px, transparent .7px);
   background-size: 18px 18px;
 }
+.app-shell.login-shell { display: flex; align-items: center; justify-content: center; }
 .ambient { position: absolute; border-radius: 999px; filter: blur(12px); opacity: .32; pointer-events: none; }
 .ambient-one { width: 420px; height: 420px; top: -190px; right: 7%; background: #f6821f; }
 .ambient-two { width: 300px; height: 300px; bottom: -180px; left: 5%; background: #2f80ed; }
@@ -598,8 +741,8 @@ async function toggleTunnel() {
   z-index: 1;
   display: grid;
   width: min(960px, 100%);
-  min-height: 600px;
-  margin: 0 auto;
+  min-height: min(600px, calc(100vh - 96px));
+  margin: 0;
   overflow: hidden;
   grid-template-columns: minmax(0, 1.05fr) minmax(390px, .95fr);
   border: 1px solid rgba(255,255,255,.72);
@@ -764,6 +907,22 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
 .refresh-button { display: inline-flex; align-items: center; gap: 7px; margin-top: 18px; padding: 8px 0; color: #42617f; border: 0; background: transparent; font-size: 12px; font-weight: 800; cursor: pointer; }
 .refresh-button:hover { color: #f27217; }
 
+.account-panel { margin: 0 26px 20px; padding: 24px 26px; }
+.account-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.account-title { margin-bottom: 0; }
+.default-credential-badge { flex: 0 0 auto; padding: 7px 10px; color: #9a5314; border: 1px solid #f0c28f; border-radius: 999px; background: #fff5e9; font-size: 11px; font-weight: 800; }
+.default-credential-note { display: flex; align-items: center; gap: 9px; margin-top: 18px; padding: 11px 13px; color: #7b4b1f; border: 1px solid #f0d1ad; border-radius: 10px; background: #fff8ef; font-size: 12px; }
+.default-credential-note svg { flex: 0 0 auto; color: #df761c; }
+.credential-form { margin-top: 20px; }
+.credential-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
+.credential-fields label { min-width: 0; }
+.credential-fields input { width: 100%; min-height: 44px; padding: 0 13px; color: #1d2b3d; border: 1px solid #cbd6e2; border-radius: 11px; outline: 0; background: #f8fafc; font-size: 13px; transition: .2s ease; }
+.credential-fields input:focus { border-color: #f6821f; background: #fff; box-shadow: 0 0 0 4px rgba(246,130,31,.12); }
+.credential-fields input:disabled { cursor: wait; opacity: .6; }
+.credential-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 20px; }
+.credential-notice { flex: 1 1 auto; margin-top: 0; }
+.credential-button { flex: 0 0 auto; }
+
 .guide-panel { margin: 0 26px 24px; padding: 22px 26px; border: 1px solid #d9e4ef; border-radius: 18px; background: linear-gradient(120deg, #eef6ff, #f8fbff); }
 .guide-heading { display: flex; align-items: flex-start; gap: 11px; }
 .guide-heading > svg { margin-top: 2px; color: #2f73b8; }
@@ -787,7 +946,7 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
 
 @media (max-width: 820px) {
   .app-shell { padding: 20px 12px; }
-  .login-panel { grid-template-columns: 1fr; }
+  .login-panel { min-height: min(600px, calc(100vh - 40px)); grid-template-columns: 1fr; }
   .login-brand-panel { padding: 34px 30px; }
   .login-intro { margin-top: 24px; }
   .login-security-card { margin-top: 24px; }
@@ -798,6 +957,10 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
   .subtitle { display: none; }
   .status-pill { min-width: auto; padding: 9px 11px; }
   .dashboard-grid { grid-template-columns: 1fr; padding: 16px; }
+  .account-panel { margin: 0 16px 18px; padding: 20px; }
+  .credential-fields { grid-template-columns: 1fr; }
+  .credential-actions { align-items: stretch; flex-direction: column; }
+  .credential-button { width: 100%; }
   .guide-panel { margin: 0 16px 18px; padding: 20px; }
   .steps { grid-template-columns: 1fr; }
   .footer-bar { align-items: flex-start; flex-direction: column; padding: 17px 20px; }

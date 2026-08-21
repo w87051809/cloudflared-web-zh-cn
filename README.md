@@ -34,11 +34,20 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.6` |
+| 中文定制版 | `2026.8.2-zh-cn.7` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
 | 支持架构 | `linux/amd64`、`linux/arm64`、`linux/arm/v7` |
+
+## 默认登录信息
+
+| 项目 | 默认值 |
+| --- | --- |
+| 管理账号 | `admin` |
+| 管理密码 | `123456789` |
+
+登录页面不会预填账号或密码。首次进入管理后台后，请在“登录设置”中修改账号和密码。修改后的密码使用 `scrypt` 加盐哈希后保存到 `/config/auth.json`，不会保存明文。
 
 ## 部署
 
@@ -54,7 +63,7 @@ cp .env.example .env
 
 ```dotenv
 CLOUDFLARED_WEB_USER=admin
-CLOUDFLARED_WEB_PASSWORD=请替换为独立的强密码
+CLOUDFLARED_WEB_PASSWORD=123456789
 CLOUDFLARED_WEB_SESSION_SECRET=请替换为至少32位的随机字符
 ```
 
@@ -65,7 +74,7 @@ CLOUDFLARED_WEB_SESSION_SECRET=请替换为至少32位的随机字符
 ```yaml
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.6
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.7
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
@@ -73,7 +82,7 @@ services:
       WEBUI_HOST: 0.0.0.0
       WEBUI_PORT: 14333
       BASIC_AUTH_USER: ${CLOUDFLARED_WEB_USER:-admin}
-      BASIC_AUTH_PASS: ${CLOUDFLARED_WEB_PASSWORD:?请先在 .env 设置登录密码}
+      BASIC_AUTH_PASS: ${CLOUDFLARED_WEB_PASSWORD:-123456789}
       WEBUI_SESSION_SECRET: ${CLOUDFLARED_WEB_SESSION_SECRET:?请先在 .env 设置会话密钥}
       WEBUI_SESSION_HOURS: 12
       WEBUI_COOKIE_SECURE: auto
@@ -96,7 +105,9 @@ docker compose up -d
 http://路由器IP:14333
 ```
 
-首次登录后，从 Cloudflare Zero Trust 控制台复制 Tunnel Token，在管理页面保存并启动隧道。
+使用默认账号和密码登录后，先在“登录设置”中更换登录信息，再从 Cloudflare Zero Trust 控制台复制 Tunnel Token，在管理页面保存并启动隧道。
+
+环境变量中的账号和密码只用于首次创建 `/config/auth.json`。管理页面修改成功后，以 `/config/auth.json` 中的加密登录信息为准。
 
 ## 配置参数
 
@@ -104,8 +115,8 @@ http://路由器IP:14333
 | --- | --- | --- |
 | `WEBUI_HOST` | `0.0.0.0` | Web 管理服务监听地址 |
 | `WEBUI_PORT` | `14333` | Web 管理服务监听端口 |
-| `BASIC_AUTH_USER` | `admin` | 管理账号 |
-| `BASIC_AUTH_PASS` | 空 | 管理密码；为空时不启用登录保护 |
+| `BASIC_AUTH_USER` | `admin` | 首次启动时使用的管理账号 |
+| `BASIC_AUTH_PASS` | `123456789` | 首次启动时使用的管理密码 |
 | `WEBUI_SESSION_SECRET` | 随机值 | 会话签名密钥；生产环境应固定设置 |
 | `WEBUI_SESSION_HOURS` | `12` | 登录会话有效期，允许范围为 1 至 168 小时 |
 | `WEBUI_COOKIE_SECURE` | `auto` | 根据 HTTP/HTTPS 自动设置安全 Cookie，也可指定 `true` 或 `false` |
@@ -121,6 +132,7 @@ http://路由器IP:14333
 ## 安全设计
 
 - 未登录请求无法访问隧道配置、状态和控制接口。
+- 登录账号和密码可以在管理页面修改，密码使用 `scrypt` 加盐哈希保存。
 - 登录会话使用 HMAC-SHA256 签名，Cookie 设置 `HttpOnly` 和 `SameSite=Strict`。
 - 同一来源连续登录失败 5 次后，将暂停登录 5 分钟。
 - Tunnel Token 仅保存在容器挂载的 `/config/config.json`，管理页面不会返回完整内容。
@@ -152,7 +164,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.6 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.7 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。
