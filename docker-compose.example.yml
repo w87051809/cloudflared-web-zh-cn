@@ -1,0 +1,17 @@
+services:
+  cloudflared-web:
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.4
+    container_name: cloudflared-web
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      WEBUI_HOST: 0.0.0.0
+      WEBUI_PORT: 14333
+      PROTOCOL: http2
+      UI_LANGUAGE: zh-CN
+    dns:
+      - 223.5.5.5
+      - 119.29.29.29
+    volumes:
+      - ./config:/config
+      - ./config/cloudflared:/root/.cloudflared
