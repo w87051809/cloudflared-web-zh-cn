@@ -4,10 +4,38 @@
  */
 
 const childProcess = require('node:child_process');
-const commandExistsSync = require('command-exists').sync;
+const fs = require('node:fs');
+const path = require('node:path');
+
+function resolveExecutable(command) {
+  const text = String(command || '').trim();
+  if (!text) return '';
+
+  const hasPathSeparator = text.includes('/') || text.includes('\\');
+  const directories = hasPathSeparator ? [''] : String(process.env.PATH || '').split(path.delimiter);
+  const extensions = process.platform === 'win32'
+    ? ['', ...String(process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')]
+    : [''];
+
+  for (const directory of directories) {
+    for (const extension of extensions) {
+      const executableName = extension && !text.toLowerCase().endsWith(extension.toLowerCase())
+        ? text + extension
+        : text;
+      const candidate = hasPathSeparator ? executableName : path.join(directory, executableName);
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        return candidate;
+      } catch {
+        // 继续检查下一个 PATH 目录。
+      }
+    }
+  }
+  return '';
+}
 
 class CloudflaredTunnel {
-  constructor(cloudflaredPath = 'cloudflared') {
+  constructor(cloudflaredPath = '/usr/local/bin/cloudflared') {
     this.cloudflaredPath = cloudflaredPath;
     this.childProcess = null;
     this.lastError = '';
@@ -29,7 +57,8 @@ class CloudflaredTunnel {
 
   start(additionalArgs = {}) {
     if (this.isRunning()) throw new Error('Already started');
-    if (!commandExistsSync(this.cloudflaredPath)) {
+    const executablePath = resolveExecutable(this.cloudflaredPath);
+    if (!executablePath) {
       throw new Error(`Cloudflared error: ${this.cloudflaredPath} is not found`);
     }
     if (!this.token) throw new Error('Cloudflared error: Token is not set');
@@ -50,7 +79,7 @@ class CloudflaredTunnel {
     console.log('TUNNEL: 启动 cloudflared', safeArgs.join(' '));
 
     this.lastError = '';
-    this.childProcess = childProcess.spawn(this.cloudflaredPath, args);
+    this.childProcess = childProcess.spawn(executablePath, args);
     this.childProcess.stdout.pipe(process.stdout);
     this.childProcess.stderr.pipe(process.stderr);
 

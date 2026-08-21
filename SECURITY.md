@@ -7,6 +7,8 @@
 - Cloudflare Tunnel 指向本管理页面时，源服务必须使用 `127.0.0.1` 或 `localhost`，不能使用路由器局域网 IP。
 - `/config/auth.json` 包含登录密码的加盐哈希，应仅允许管理员和容器读取。
 - `/config/config.json` 和 cloudflared 配置文件包含敏感信息，程序会按 `0600` 权限原子写入。
+- 正式镜像使用最小化 Distroless 运行环境，cloudflared 从校验后的官方标签源码使用已修复 Go 工具链构建。
+- 发布前会扫描每种架构的实际镜像摘要，并阻止带有可修复高危或严重漏洞的镜像发布。
 - 登录会话可在退出时立即吊销，敏感接口禁止缓存并校验同源 JSON 请求。
 - 怀疑 Token 泄露时，应立即在 Cloudflare Zero Trust 后台更换令牌。
 - 安全问题请使用 GitHub Security Advisory 私下报告。

@@ -8,61 +8,62 @@ RUN npm ci
 COPY app/frontend/ ./
 RUN npm run build
 
-FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS backend-dependencies
+
+WORKDIR /build
+
+COPY app/backend/package.json app/backend/package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS cloudflared-builder
 
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-
 ARG CLOUDFLARED_VERSION=2026.8.2
-ARG CLOUDFLARED_BASE_URL="https://github.com/cloudflare/cloudflared/releases/download"
 
-ENV VERSION=$CLOUDFLARED_VERSION
-ENV APP_VERSION=2026.8.2-zh-cn.8
+WORKDIR /src
+
+ADD --checksum=sha256:acdf125b7e872be6e1d13116e8054d27b2c4755760b0cdc3b4ee3910edd37b93 \
+    https://codeload.github.com/cloudflare/cloudflared/tar.gz/refs/tags/2026.8.2 \
+    /tmp/cloudflared-source.tar.gz
+
+RUN set -eu; \
+    tar -xzf /tmp/cloudflared-source.tar.gz --strip-components=1 -C /src; \
+    mkdir -p /out; \
+    if [ "$TARGETARCH" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
+    CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
+      go build -mod=vendor -trimpath \
+      -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-08-14T12:23:25Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
+      -o /out/cloudflared github.com/cloudflare/cloudflared/cmd/cloudflared
+
+FROM gcr.io/distroless/nodejs22-debian13@sha256:c2753c8b3754b5bde34c1bbbaaa81b2e3ddd67604a867c3521257241f281ce0f
+
+ENV VERSION=2026.8.2
+ENV APP_VERSION=2026.8.2-zh-cn.9
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
-ENV WEBUI_PORT=${WEBUI_PORT:-14333}
-ENV METRICS_ENABLE=${METRICS_ENABLE:-"false"}
-ENV METRICS_PORT=${METRICS_PORT:-60123}
+ENV WEBUI_PORT=14333
+ENV METRICS_ENABLE=false
+ENV METRICS_PORT=60123
+ENV CLOUDFLARED_BIN=/usr/local/bin/cloudflared
 
-EXPOSE ${WEBUI_PORT}
-EXPOSE ${METRICS_PORT}
+EXPOSE 14333 60123
 
-USER root
+USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.8" \
+      org.opencontainers.image.version="2026.8.2-zh-cn.9" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
-      org.opencontainers.image.licenses="GPL-2.0"
+      org.opencontainers.image.licenses="GPL-2.0-only"
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
-    apt-get clean
-
-RUN if [ "$TARGETVARIANT" = "v7" ]; then \
-        CLOUDFLARED_PKG="cloudflared-$TARGETOS-${TARGETARCH}hf.deb"; \
-        CLOUDFLARED_SHA256="2ddaadc63910d1704f1a562044b4ae330a924da7a49c5dbd44207eaa91e44a1d"; \
-    else \
-        CLOUDFLARED_PKG="cloudflared-$TARGETOS-$TARGETARCH.deb"; \
-        case "$TARGETARCH" in \
-            amd64) CLOUDFLARED_SHA256="c805c7c8102190c04dfc16e3b4cc4acc9007d5b19b3afbcd608ea6fed7645a43" ;; \
-            arm64) CLOUDFLARED_SHA256="096739c69f62cace40b144f0e6c81e61333f3d320ce07a265c7b17b5e925731c" ;; \
-            386) CLOUDFLARED_SHA256="aa7143b5194b60e4bf3023461b686d1d1f359c84ce9ce6f6c3f597b71cbe338b" ;; \
-            *) echo "Unsupported architecture: $TARGETARCH/$TARGETVARIANT" >&2; exit 1 ;; \
-        esac; \
-    fi && \
-    curl -fL --retry 3 --output cloudflared.deb "$CLOUDFLARED_BASE_URL/$CLOUDFLARED_VERSION/$CLOUDFLARED_PKG" && \
-    echo "$CLOUDFLARED_SHA256  cloudflared.deb" | sha256sum -c - && \
-    dpkg -i cloudflared.deb && \
-    rm cloudflared.deb
+COPY --from=cloudflared-builder --chown=0:0 /out/cloudflared /usr/local/bin/cloudflared
+COPY --from=backend-dependencies --chown=0:0 /build/node_modules /var/app/backend/node_modules
+COPY --chown=0:0 app/backend/package.json app/backend/app.js app/backend/cloudflare-tunnel.js /var/app/backend/
+COPY --from=frontend-builder --chown=0:0 /build/dist /var/app/frontend/dist
 
 VOLUME /config
 VOLUME /root/.cloudflared
 
-COPY app/backend/package.json app/backend/package-lock.json /var/app/backend/
-RUN cd /var/app/backend && npm ci --omit=dev
-
-COPY app/backend/ /var/app/backend/
-COPY --from=frontend-builder /build/dist /var/app/frontend/dist
-
-ENTRYPOINT ["node", "/var/app/backend/app.js"]
+ENTRYPOINT ["/nodejs/bin/node", "/var/app/backend/app.js"]

@@ -101,7 +101,7 @@
           </button>
         </form>
 
-        <p class="login-footer">中文定制版 2026.8.2-zh-cn.8 · 仅限授权人员访问</p>
+        <p class="login-footer">中文定制版 2026.8.2-zh-cn.9 · 仅限授权人员访问</p>
       </section>
     </main>
 
@@ -438,7 +438,7 @@
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 2026.8.2-zh-cn.8</span>
+          <span class="build-tag">中文定制版 2026.8.2-zh-cn.9</span>
           <span v-if="updateInfo.update" class="update-tip">项目有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">

@@ -34,7 +34,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.8` |
+| 中文定制版 | `2026.8.2-zh-cn.9` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -74,7 +74,7 @@ CLOUDFLARED_WEB_SESSION_SECRET=请替换为至少32位的随机字符
 ```yaml
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.8
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.9
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
@@ -150,6 +150,9 @@ http://路由器IP:14333
 - 写入接口只接受同源 JSON 请求，并统一设置安全响应头和禁止敏感内容缓存。
 - Tunnel Token 仅保存在容器挂载的 `/config/config.json`，管理页面不会返回完整内容。
 - 示例部署启用只读根文件系统、受限临时目录和 `no-new-privileges`。
+- 运行镜像采用固定摘要的 Distroless Node.js，不包含 npm、curl、Shell 和系统包管理器。
+- cloudflared `2026.8.2` 使用经过 SHA-256 校验的官方标签源码和 Go `1.26.6` 构建，补齐核心运行时安全修复。
+- 发布流水线逐架构扫描实际待发布摘要；存在可修复的高危或严重漏洞时不会发布正式镜像标签。
 - 配置目录、环境变量文件和备份文件应限制为管理员访问。
 
 详细安全说明见 [SECURITY.md](SECURITY.md)。
@@ -178,7 +181,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.8 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.9 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。

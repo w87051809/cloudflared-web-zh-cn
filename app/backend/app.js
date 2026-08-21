@@ -10,7 +10,8 @@ const { execFileSync } = require('node:child_process');
 const { CloudflaredTunnel } = require('./cloudflare-tunnel.js');
 
 const app = express();
-const tunnel = new CloudflaredTunnel();
+const cloudflaredPath = process.env.CLOUDFLARED_BIN || (process.platform === 'win32' ? 'cloudflared' : '/usr/local/bin/cloudflared');
+const tunnel = new CloudflaredTunnel(cloudflaredPath);
 const port = process.env.WEBUI_PORT || 14333;
 const host = process.env.WEBUI_HOST || '0.0.0.0';
 const configdir = process.env.CONFIG_DIR || '/config';
@@ -252,7 +253,7 @@ app.get('/details', (req, res) => {
 
 app.get('/version', (req, res) => {
   try {
-    const version = execFileSync('cloudflared', ['-v'], { encoding: 'utf8', timeout: 5000 });
+    const version = execFileSync(cloudflaredPath, ['-v'], { encoding: 'utf8', timeout: 5000 });
     res.status(200).type('text/plain').send(version);
   } catch (error) {
     res.status(500).type('text/plain').send('无法读取 cloudflared 版本。');
@@ -338,7 +339,7 @@ app.post('/advanced/config/local', (req, res) => {
     fs.writeFileSync(tempFile.name, yaml, { mode: 0o600 });
     if (yaml.trim()) {
       execFileSync(
-        'cloudflared',
+        cloudflaredPath,
         ['--config', tempFile.name, 'tunnel', 'ingress', 'validate'],
         { timeout: 10000, maxBuffer: 1024 * 1024 },
       );
