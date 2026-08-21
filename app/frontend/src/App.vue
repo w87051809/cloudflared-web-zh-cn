@@ -153,7 +153,7 @@
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 2026.8.2-zh-cn.3</span>
+          <span class="build-tag">中文定制版 2026.8.2-zh-cn.5</span>
           <span v-if="updateInfo.update" class="update-tip">官方有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">

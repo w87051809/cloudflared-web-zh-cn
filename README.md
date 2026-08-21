@@ -1,150 +1,74 @@
-# Cloudflared-web 中文版
+# Cloudflared-web 中文定制版
 
-> 中文说明请查看 [README.zh-CN.md](README.zh-CN.md)。当前版本：`2026.8.2-zh-cn.4`。
->
-> 本项目基于 [WisdomSky/Cloudflared-web](https://github.com/WisdomSky/Cloudflared-web) 修改，保留 GPL-2.0 开源协议。
+[![版本](https://img.shields.io/badge/版本-2026.8.2--zh--cn.5-orange)](https://github.com/w87051809/cloudflared-web-zh-cn/releases/tag/v2026.8.2-zh-cn.5)
+[![cloudflared](https://img.shields.io/badge/cloudflared-2026.8.2-blue)](https://github.com/cloudflare/cloudflared/releases/tag/2026.8.2)
+[![许可](https://img.shields.io/badge/许可-GPL--2.0-green)](LICENSE)
 
-# [Cloudflared-web](https://github.com/WisdomSky/Cloudflared-web)
+这是专门给路由器和内网环境使用的 Cloudflare Tunnel 中文管理界面。可以在网页中保存连接令牌、启动或停止隧道，并查看当前连接协议、边缘网络 IP、管理端口和核心版本。
 
-_Cloudflared-web is a docker image that packages both [cloudflared cli](https://github.com/cloudflare/cloudflared/releases) and a simple Web UI to easily start or stop remotely-managed Cloudflare tunnel._
+本项目基于 [WisdomSky/Cloudflared-web](https://github.com/WisdomSky/Cloudflared-web) 修改，继续使用 GPL-2.0 开源协议。
 
+## 中文界面预览
 
-[![build](https://github.com/WisdomSky/Cloudflared-web/workflows/Build/badge.svg)](https://github.com/WisdomSky/Cloudflared-web/actions "Build Status")
-[![latest](https://img.shields.io/docker/v/wisdomsky/cloudflared-web/latest?label=Latest)](https://hub.docker.com/r/wisdomsky/cloudflared-web/tags "Latest Tag")
-[![pulls](https://img.shields.io/docker/pulls/wisdomsky/cloudflared-web?label=Pulls)](https://hub.docker.com/r/wisdomsky/cloudflared-web "Docker Hub Pulls")
-[![stars](https://img.shields.io/docker/stars/wisdomsky/cloudflared-web?label=%E2%AD%90)](https://hub.docker.com/r/wisdomsky/cloudflared-web "Docker Hub Stars")
+<img src="./screenshot-1.png" alt="Cloudflared-web 中文管理界面" width="1200">
 
----
+## 当前版本
 
-✅ Easy run-and-forget setup.
+- 中文定制版：`2026.8.2-zh-cn.5`
+- cloudflared 核心：`2026.8.2`
+- 支持架构：`linux/amd64`、`linux/arm64`、`linux/arm/v7`
+- 默认管理端口：`14333`
+- 推荐隧道协议：`HTTP/2`
 
-✅ Manage cloudflared token from a simple and user-friendly Web UI.
-
-✅ Start and stop cloudflare tunnel anytime with a single click.
-
---- 
-## Application Setup
-When manually setting up this image, it is crucial to always set the `networking mode` into `host` as without it, the cloudflared service won't be able to access the services running on the host:
-
-    docker run --network host wisdomsky/cloudflared-web:latest
-
-or if using `docker-compose.yml`:
+## Docker Compose 部署
 
 ```yaml
 services:
-  cloudflared:
-    image: wisdomsky/cloudflared-web:latest
-    restart: unless-stopped
-    network_mode: host
-```
-
-The Web UI where you can setup the Cloudflared token can be accessed from port `14333`:
-
-    http://localhost:14333
-
-### Github Containers
-
-If for some reason you are unable to pull images from Docker's Official Image Registry (docker.io), `Cloudflared-web` is also synced to Github Container Registry (ghcr.io).
-
-Just prefix the image with `ghcr.io/` in order to use the mirrored image in Github.
-```yaml
-services:
-  cloudflared:
-    image: ghcr.io/wisdomsky/cloudflared-web:latest
-    restart: unless-stopped
-    network_mode: host
-```
-
-
----
-## Additional Parameters
-
-### Environment
-| Variable Name     | Default value | Required or Optional | Description                                                                                                                                                                                                                                                                                                                         |
-|-------------------|---------------|---|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| WEBUI_HOST        | 0.0.0.0         | _Optional_ | This will work if you want the WebUI to listen on a different host address |
-| WEBUI_PORT        | 14333         | _Optional_ | The port on the host where the WebUI will be running. Useful when an existing process is running on port `14333` and want to assign cloudflared-web into a different available port.                                                                                                                                                |
-| BASIC_AUTH_PASS   |               | _Optional_ | Enable Basic Auth by specifying a password. If `BASIC_AUTH_USER` is not specified, the default value for username `admin` will be used.                                                                                                                                                                                             |
-| BASIC_AUTH_USER   | admin         | _Optional_ | Specify the username for the Basic Auth.                                                                                                                                                                                                                                                                                            |
-| EDGE_BIND_ADDRESS |               | _Optional_ | Specifies the outgoing IP address used to establish a connection between `cloudflared` and the Cloudflare global network.<br/><br/>The IP version of `EDGE_BIND_ADDRESS` will override `EDGE_IP_VERSION` (if provided). For example, if you enter an IPv6 source address, `cloudflared` will always connect to an IPv6 destination. |
-| EDGE_IP_VERSION   | auto          | _Optional_ | Specifies the IP address version (IPv4 or IPv6) used to establish a connection between `cloudflared` and the Cloudflare global network. Available values are `auto`, `4`, and `6`.                                                                                                                                                  |
-| PROTOCOL          | auto          | _Optional_ | Specifies the protocol used to establish a connection between `cloudflared` and the Cloudflare global network. Available values are `auto`, `http2`, and `quic`.                                                                                                                                                                    |
-| GRACE_PERIOD      | 30s           | _Optional_ | When `cloudflared` receives SIGINT/SIGTERM it will stop accepting new requests, wait for in-progress requests to terminate, then shut down. Waiting for in-progress requests will timeout after this grace period, or when a second SIGTERM/SIGINT is received.                                                                     |
-| REGION            |               | _Optional_ | Allows you to choose the regions to which connections are established. Currently the only available value is `us`, which routes all connections through data centers in the United States. Omit or leave empty to connect to the global region.                                                                                     |
-| RETRIES           | 5             | _Optional_ | Specifies the maximum number of retries for connection/protocol errors. Retries use exponential backoff (retrying at `1`, `2`, `4`, `8`, `16` seconds by default), so it is **NOT RECOMMENDED** that you increase this value significantly.                                                                                         |
-| METRICS_ENABLE    | false         | _Optional_ | Enable [tunnel metrics](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/monitor-tunnels/metrics/) server.                                                                                                                                                                                             |
-| METRICS_PORT      | 60123         | _Optional_ | Specify port to run tunnel metrics on. `METRICS_ENABLE` must be set to `true`.                                                                                                                                                                                                                                                      |
-
-Based on Cloudflare [tunel run parameters](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/tunnel-run-parameters/) documentation.
-
-
-example `docker-compose.yaml`:
-```yaml
-services:
-  cloudflared:
-    image: wisdomsky/cloudflared-web:latest
+  cloudflared-web:
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.5
+    container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
     environment:
-      WEBUI_PORT: 1111
+      WEBUI_PORT: 14333
       PROTOCOL: http2
-```
-
-
-### Volumes
-| Container Path | Required or Optional | Description |
-|---|---|---|
-| /config | _Optional_ | The path to the directory where the `config.json` file containing the Cloudflare token and start status will be saved.  |
-
-example `docker-compose.yaml`:
-```yaml
-services:
-  cloudflared:
-    image: wisdomsky/cloudflared-web:latest
-    restart: unless-stopped
-    network_mode: host
     volumes:
-      - /mnt/storage/cloudflared/config:/config
+      - ./config:/config
 ```
 
-> [!TIP]
-> Binding a volume is very useful for persisting the `token` everytime you update `cloudflared-web` to a newer version.
+启动：
 
-## Using Networks
-
-You can use docker `networks` for a more fine-grained control of which containers/services your cloudflared-web container has access to.
-
-```yaml
-services:
-  cloudflared:
-    image: wisdomsky/cloudflared-web:latest
-    restart: unless-stopped
-    networks:
-      - mynetwork
-    environment:
-      WEBUI_PORT: 1111
+```bash
+docker compose up -d
 ```
 
-> [!NOTE]
-> For more advanced networking see [Docker Compose Networking](https://docs.docker.com/compose/how-tos/networking/).
+管理页面：
 
-## Screenshots
+```text
+http://路由器IP:14333
+```
 
-![Screenshot 1](https://raw.githubusercontent.com/WisdomSky/Cloudflared-web/main/screenshot-1.png)
+首次打开后，把 Cloudflare Zero Trust 中的 Tunnel Token 粘贴到页面并保存。令牌只保存在本机 `/config` 目录，不会显示在页面日志中。
 
-![Screenshot 2](https://raw.githubusercontent.com/WisdomSky/Cloudflared-web/main/screenshot-2.png)
+## 为什么默认使用 HTTP/2
 
----
+部分运营商线路会限制 QUIC 使用的 UDP 7844，表现为隧道偶尔离线或一直连接失败。设置 `PROTOCOL: http2` 后改走 TCP，通常更稳定，也不会限制局域网设备的普通下载速度。
 
-## Issues
+## 自行构建
 
-For any problems experienced while using the docker image, please [create a new issue](https://github.com/WisdomSky/Cloudflared-web/issues).
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64,linux/arm/v7 \
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.5 .
+```
 
---- 
+构建过程会从 Cloudflare 官方发布页下载对应架构的安装包，并进行 SHA-256 校验。
 
-## Contribute
+## 安全说明
 
+不要把 Tunnel Token、密码、私钥或实际 `/config` 目录提交到仓库。发现安全问题请查看 [SECURITY.md](SECURITY.md)。
 
-### Adding A Language Translation
+## 上游项目
 
-See [Localization](https://github.com/WisdomSky/Cloudflared-web/wiki/Localization).
+- [WisdomSky/Cloudflared-web](https://github.com/WisdomSky/Cloudflared-web)
+- [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared)
