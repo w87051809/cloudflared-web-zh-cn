@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS frontend-builder
 
 WORKDIR /build
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY app/frontend/ ./
 RUN npm run build
 
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -18,6 +18,8 @@ ARG CLOUDFLARED_VERSION=2026.8.2
 ARG CLOUDFLARED_BASE_URL="https://github.com/cloudflare/cloudflared/releases/download"
 
 ENV VERSION=$CLOUDFLARED_VERSION
+ENV APP_VERSION=2026.8.2-zh-cn.8
+ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=${WEBUI_PORT:-14333}
 ENV METRICS_ENABLE=${METRICS_ENABLE:-"false"}
@@ -30,7 +32,7 @@ USER root
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.7" \
+      org.opencontainers.image.version="2026.8.2-zh-cn.8" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0"
 

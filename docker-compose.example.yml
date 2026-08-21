@@ -1,9 +1,14 @@
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.7
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.8
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
     environment:
       WEBUI_HOST: 0.0.0.0
       WEBUI_PORT: 14333
@@ -12,6 +17,7 @@ services:
       WEBUI_SESSION_SECRET: ${CLOUDFLARED_WEB_SESSION_SECRET:?请先在 .env 设置会话密钥}
       WEBUI_SESSION_HOURS: 12
       WEBUI_COOKIE_SECURE: auto
+      WEBUI_TRUST_PROXY: "true"
       PROTOCOL: http2
       UI_LANGUAGE: zh-CN
     dns:

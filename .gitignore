@@ -6,6 +6,7 @@ dev/config
 dev/.cloudflared
 .idea
 .DS_Store
+.playwright-cli
 .env
 .env.*
 !.env.example

@@ -34,7 +34,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.7` |
+| 中文定制版 | `2026.8.2-zh-cn.8` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -47,7 +47,7 @@
 | 管理账号 | `admin` |
 | 管理密码 | `123456789` |
 
-登录页面不会预填账号或密码。首次进入管理后台后，请在“登录设置”中修改账号和密码。修改后的密码使用 `scrypt` 加盐哈希后保存到 `/config/auth.json`，不会保存明文。
+登录页面不会预填账号或密码。默认信息只允许在可信局域网内首次使用；登录后系统会先要求修改账号和密码，完成修改前，隧道配置、状态和控制接口不会开放。修改后的密码使用 `scrypt` 加盐哈希后保存到 `/config/auth.json`，不会保存明文。
 
 ## 部署
 
@@ -74,10 +74,15 @@ CLOUDFLARED_WEB_SESSION_SECRET=请替换为至少32位的随机字符
 ```yaml
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.7
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.8
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
     environment:
       WEBUI_HOST: 0.0.0.0
       WEBUI_PORT: 14333
@@ -86,6 +91,7 @@ services:
       WEBUI_SESSION_SECRET: ${CLOUDFLARED_WEB_SESSION_SECRET:?请先在 .env 设置会话密钥}
       WEBUI_SESSION_HOURS: 12
       WEBUI_COOKIE_SECURE: auto
+      WEBUI_TRUST_PROXY: "true"
       PROTOCOL: http2
       EDGE_IP_VERSION: auto
     volumes:
@@ -105,7 +111,7 @@ docker compose up -d
 http://路由器IP:14333
 ```
 
-使用默认账号和密码登录后，先在“登录设置”中更换登录信息，再从 Cloudflare Zero Trust 控制台复制 Tunnel Token，在管理页面保存并启动隧道。
+使用默认账号和密码登录后，先按页面要求更换登录信息，再从 Cloudflare Zero Trust 控制台复制 Tunnel Token，在管理页面保存并启动隧道。
 
 环境变量中的账号和密码只用于首次创建 `/config/auth.json`。管理页面修改成功后，以 `/config/auth.json` 中的加密登录信息为准。
 
@@ -120,7 +126,8 @@ http://路由器IP:14333
 | `WEBUI_SESSION_SECRET` | 随机值 | 会话签名密钥；生产环境应固定设置 |
 | `WEBUI_SESSION_HOURS` | `12` | 登录会话有效期，允许范围为 1 至 168 小时 |
 | `WEBUI_COOKIE_SECURE` | `auto` | 根据 HTTP/HTTPS 自动设置安全 Cookie，也可指定 `true` 或 `false` |
-| `WEBUI_TRUST_PROXY` | `false` | 通过可信反向代理部署时可设置为 `true` |
+| `WEBUI_TRUST_PROXY` | `false` | 同容器 cloudflared 或本机可信反向代理转发访问时设置为 `true`，仅信任回环代理 |
+| `WEBUI_ALLOW_REMOTE_SETUP` | `false` | 是否允许从公网首次使用默认密码；正式环境不要开启 |
 | `PROTOCOL` | `auto` | 隧道连接协议：`auto`、`http2` 或 `quic` |
 | `EDGE_IP_VERSION` | `auto` | Cloudflare 边缘连接 IP 版本：`auto`、`4` 或 `6` |
 | `EDGE_BIND_ADDRESS` | 空 | 指定隧道连接使用的本地源地址 |
@@ -129,13 +136,20 @@ http://路由器IP:14333
 
 部分运营商线路会限制 QUIC 使用的 UDP 7844。出现隧道连接不稳定时，可以将 `PROTOCOL` 固定为 `http2`。
 
+如果为本管理页面配置 Cloudflare Tunnel 路由，源服务必须填写 `http://127.0.0.1:14333` 或 `http://localhost:14333`，不要填写路由器的局域网 IP。这样首次默认信息只能由可信局域网用户修改，公网请求会按真实来源拦截。
+
 ## 安全设计
 
 - 未登录请求无法访问隧道配置、状态和控制接口。
+- 默认账号和密码首次登录后必须更换，完成前不会开放管理接口。
+- 默认信息只允许在可信局域网内首次修改，公网来源无法使用公开默认密码接管后台。
 - 登录账号和密码可以在管理页面修改，密码使用 `scrypt` 加盐哈希保存。
-- 登录会话使用 HMAC-SHA256 签名，Cookie 设置 `HttpOnly` 和 `SameSite=Strict`。
+- 登录会话使用 HMAC-SHA256 签名并记录服务端会话，退出登录后立即失效；Cookie 设置 `HttpOnly` 和 `SameSite=Strict`。
 - 同一来源连续登录失败 5 次后，将暂停登录 5 分钟。
+- 管理服务设有全局请求频率限制，避免接口被持续占用。
+- 写入接口只接受同源 JSON 请求，并统一设置安全响应头和禁止敏感内容缓存。
 - Tunnel Token 仅保存在容器挂载的 `/config/config.json`，管理页面不会返回完整内容。
+- 示例部署启用只读根文件系统、受限临时目录和 `no-new-privileges`。
 - 配置目录、环境变量文件和备份文件应限制为管理员访问。
 
 详细安全说明见 [SECURITY.md](SECURITY.md)。
@@ -164,7 +178,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.7 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.8 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。

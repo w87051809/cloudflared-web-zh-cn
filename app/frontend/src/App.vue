@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell" :class="{ 'login-shell': !authChecking && authEnabled && !authenticated }">
+  <div class="app-shell" :class="{ 'login-shell': !authChecking && authEnabled && (!authenticated || mustChangeCredentials) }">
     <div class="ambient ambient-one"></div>
     <div class="ambient ambient-two"></div>
 
@@ -101,7 +101,99 @@
           </button>
         </form>
 
-        <p class="login-footer">中文定制版 2026.8.2-zh-cn.7 · 仅限授权人员访问</p>
+        <p class="login-footer">中文定制版 2026.8.2-zh-cn.8 · 仅限授权人员访问</p>
+      </section>
+    </main>
+
+    <main v-else-if="mustChangeCredentials" class="credential-setup-panel">
+      <header class="credential-setup-header">
+        <div class="brand-mark" aria-hidden="true">
+          <ShieldCheck :size="28" :stroke-width="2.2" />
+        </div>
+        <div>
+          <p class="eyebrow">ISTOREOS · 首次登录保护</p>
+          <h1>请先修改默认登录信息</h1>
+          <p>当前使用公开的默认密码。完成修改后，才能进入隧道管理页面。</p>
+        </div>
+      </header>
+
+      <section class="credential-setup-body">
+        <div class="setup-notice">
+          <LockKeyhole :size="20" />
+          <span>新密码只保存加盐哈希，原有登录会话会立即失效。</span>
+        </div>
+
+        <form class="credential-form setup-form" @submit.prevent="changeCredentials">
+          <div class="credential-fields">
+            <label>
+              <span class="field-label">当前密码</span>
+              <input
+                v-model="currentPassword"
+                type="password"
+                maxlength="128"
+                autocomplete="current-password"
+                placeholder="请输入当前默认密码"
+                :disabled="credentialBusy"
+                autofocus
+              />
+            </label>
+            <label>
+              <span class="field-label">新管理账号</span>
+              <input
+                v-model="newUsername"
+                type="text"
+                maxlength="64"
+                autocomplete="username"
+                placeholder="请输入新管理账号"
+                :disabled="credentialBusy"
+              />
+            </label>
+            <label>
+              <span class="field-label">新密码</span>
+              <input
+                v-model="newPassword"
+                type="password"
+                maxlength="128"
+                autocomplete="new-password"
+                placeholder="至少 8 个字符"
+                :disabled="credentialBusy"
+              />
+            </label>
+            <label>
+              <span class="field-label">确认新密码</span>
+              <input
+                v-model="confirmPassword"
+                type="password"
+                maxlength="128"
+                autocomplete="new-password"
+                placeholder="请再次输入新密码"
+                :disabled="credentialBusy"
+              />
+            </label>
+          </div>
+
+          <div v-if="credentialNotice.text" class="notice credential-notice setup-credential-notice" :class="`notice-${credentialNotice.type}`" role="status">
+            <CircleCheck v-if="credentialNotice.type === 'success'" :size="18" />
+            <CircleAlert v-else :size="18" />
+            <span>{{ credentialNotice.text }}</span>
+          </div>
+
+          <div class="setup-actions">
+            <button type="button" class="button button-secondary" :disabled="logoutBusy" @click="logout">
+              <LogOut :size="17" />
+              退出登录
+            </button>
+            <button
+              type="submit"
+              class="button button-primary"
+              :disabled="credentialBusy || !currentPassword || !newUsername || !newPassword || !confirmPassword"
+            >
+              <LoaderCircle v-if="credentialBusy" class="spin" :size="18" />
+              <Save v-else :size="17" />
+              {{ credentialBusy ? '正在保存' : '保存并进入管理后台' }}
+            </button>
+          </div>
+        </form>
       </section>
     </main>
 
@@ -346,8 +438,8 @@
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 2026.8.2-zh-cn.7</span>
-          <span v-if="updateInfo.update" class="update-tip">官方有新版本 {{ updateInfo.latest_version }}</span>
+          <span class="build-tag">中文定制版 2026.8.2-zh-cn.8</span>
+          <span v-if="updateInfo.update" class="update-tip">项目有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">
           <a href="https://dash.cloudflare.com/one/" target="_blank" rel="noreferrer">
@@ -435,6 +527,7 @@ const normalizedToken = computed(() => {
 })
 const tokenChanged = computed(() => Boolean(normalizedToken.value))
 const running = computed(() => details.running)
+const mustChangeCredentials = computed(() => authEnabled.value && authenticated.value && authProfile.default_credentials)
 const statusText = computed(() => {
   if (loading.value) return '正在读取'
   if (details.running) return '正在运行'
@@ -499,7 +592,10 @@ async function bootstrap() {
     const status = await response.json()
     authEnabled.value = Boolean(status.enabled)
     authenticated.value = Boolean(status.authenticated)
-    if (authenticated.value) await refreshAll()
+    if (authenticated.value) {
+      await loadAuthProfile()
+      if (!mustChangeCredentials.value) await refreshAll()
+    }
   } catch (error) {
     loginError.value = error instanceof Error ? error.message : '无法连接管理服务。'
   } finally {
@@ -511,18 +607,20 @@ async function login() {
   loginBusy.value = true
   loginError.value = ''
   try {
-    await requestJson('/auth/login', {
+    const result = await requestJson('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: loginUser.value, password: loginPassword.value }),
     })
     authenticated.value = true
+    authProfile.default_credentials = Boolean(result.must_change_credentials)
     loginUser.value = ''
     loginPassword.value = ''
     showLoginPassword.value = false
     loading.value = true
     notice.text = ''
-    await refreshAll()
+    await loadAuthProfile()
+    if (!mustChangeCredentials.value) await refreshAll()
   } catch (error) {
     loginError.value = error instanceof Error ? error.message : '登录失败，请重新尝试。'
   } finally {
@@ -533,17 +631,35 @@ async function login() {
 async function logout() {
   logoutBusy.value = true
   try {
-    await requestJson('/auth/logout', { method: 'POST' })
+    await requestJson('/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
     authenticated.value = false
     loginUser.value = ''
     loginPassword.value = ''
     loginError.value = ''
+    authProfile.username = ''
+    authProfile.default_credentials = false
+    currentPassword.value = ''
+    newUsername.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    credentialNotice.text = ''
     notice.text = ''
   } catch (error) {
     showNotice('error', error instanceof Error ? error.message : '退出登录失败。')
   } finally {
     logoutBusy.value = false
   }
+}
+
+async function loadAuthProfile() {
+  const profileData = await requestJson('/auth/profile')
+  authProfile.username = profileData.username || ''
+  authProfile.default_credentials = Boolean(profileData.default_credentials)
+  if (!newUsername.value) newUsername.value = authProfile.username
 }
 
 async function loadDetails() {
@@ -579,6 +695,7 @@ async function refreshAll() {
 }
 
 async function changeCredentials() {
+  const wasForcedChange = mustChangeCredentials.value
   credentialNotice.text = ''
   if (newUsername.value.trim().length < 3) {
     credentialNotice.type = 'error'
@@ -614,6 +731,11 @@ async function changeCredentials() {
     confirmPassword.value = ''
     credentialNotice.type = 'success'
     credentialNotice.text = '登录账号和密码已经更新，下次登录请使用新信息。'
+    if (wasForcedChange) {
+      loading.value = true
+      await refreshAll()
+      showNotice('success', '默认登录信息已经更换，管理后台现已解锁。')
+    }
   } catch (error) {
     credentialNotice.type = 'error'
     credentialNotice.text = error instanceof Error ? error.message : '保存登录信息失败。'
@@ -751,6 +873,26 @@ async function toggleTunnel() {
   box-shadow: 0 32px 100px rgba(0,0,0,.44);
   animation: panel-in .5s ease-out both;
 }
+.credential-setup-panel {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 24px;
+  background: #f7f9fc;
+  box-shadow: 0 32px 100px rgba(0, 0, 0, .42);
+  animation: panel-in .5s ease-out both;
+}
+.credential-setup-header { display: flex; align-items: flex-start; gap: 17px; padding: 30px 34px; color: #fff; background: linear-gradient(135deg, #0d2239, #173f66); }
+.credential-setup-header h1 { margin: 4px 0 7px; font-size: 27px; }
+.credential-setup-header p:last-child { margin: 0; color: #bdcad8; font-size: 13px; line-height: 1.7; }
+.credential-setup-body { padding: 30px 34px 32px; }
+.setup-notice { display: flex; align-items: center; gap: 10px; padding: 13px 14px; color: #70502f; border: 1px solid #efd1ad; border-radius: 12px; background: #fff8ef; font-size: 12px; }
+.setup-notice svg { flex: 0 0 auto; color: #e8781c; }
+.setup-form.credential-form { margin-top: 24px; }
+.setup-credential-notice.credential-notice { margin-top: 18px; }
+.setup-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 22px; }
 .login-brand-panel {
   position: relative;
   padding: 52px 46px;
@@ -952,6 +1094,9 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
   .login-security-card { margin-top: 24px; }
   .login-points { display: none; }
   .login-form-panel { padding: 38px 30px 30px; }
+  .credential-setup-header, .credential-setup-body { padding-right: 26px; padding-left: 26px; }
+  .setup-actions { align-items: stretch; flex-direction: column-reverse; }
+  .setup-actions .button { width: 100%; }
   .topbar { align-items: flex-start; padding: 24px 20px; }
   .brand-mark { width: 48px; height: 48px; border-radius: 14px; }
   .subtitle { display: none; }
@@ -970,6 +1115,7 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
   .app-shell { padding: 0; }
   .auth-loading-panel { width: 100%; min-height: 100vh; margin: 0; border: 0; border-radius: 0; }
   .login-panel { min-height: 100vh; border: 0; border-radius: 0; }
+  .credential-setup-panel { min-height: 100vh; border: 0; border-radius: 0; }
   .login-brand-panel { padding: 28px 22px; }
   .login-brand-mark { width: 50px; height: 50px; border-radius: 15px; }
   .login-intro { font-size: 13px; }

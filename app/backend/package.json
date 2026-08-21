@@ -1,10 +1,11 @@
 {
   "name": "cloudflared-web-zh-cn-backend",
-  "version": "2026.8.2-zh-cn.7",
+  "version": "2026.8.2-zh-cn.8",
   "description": "Cloudflared-web 中文版后端服务",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "cloudflare",
@@ -14,8 +15,8 @@
   "license": "GPL-2.0-only",
   "dependencies": {
     "command-exists": "^1.2.9",
-    "cors": "^2.8.5",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.6.2",
     "tmp": "^0.2.3"
   }
 }
