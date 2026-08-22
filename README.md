@@ -35,7 +35,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.10` |
+| 中文定制版 | `2026.8.2-zh-cn.11` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -108,6 +108,7 @@ http://路由器IP:14333
 | `UPDATER_SHARED_SECRET` | 随机值 | Web 管理服务与独立更新服务之间的签名密钥，至少 32 个字节 |
 | `UPDATER_SOCKET_PATH` | `/run/cloudflared-web-updater/updater.sock` | 本机更新通信路径，不开放 TCP 端口 |
 | `PROTOCOL` | `auto` | 隧道连接协议：`auto`、`http2` 或 `quic` |
+| `HA_CONNECTIONS` | `1` | 单个 cloudflared 实例建立的 Cloudflare 边缘连接数，默认固定为 1 条 |
 | `EDGE_IP_VERSION` | `auto` | Cloudflare 边缘连接 IP 版本：`auto`、`4` 或 `6` |
 | `EDGE_BIND_ADDRESS` | 空 | 指定隧道连接使用的本地源地址 |
 | `METRICS_ENABLE` | `false` | 是否启用 cloudflared 指标服务 |
@@ -139,7 +140,7 @@ http://路由器IP:14333
 
 ## 更新与回滚
 
-安装 `2026.8.2-zh-cn.10` 后，后续版本可在管理页面“系统更新”区域点击“一键更新全部”。每个正式镜像同时包含对应的中文管理界面和 cloudflared 内核，二者不会拆开升级。系统只接受本项目 GitHub 最新公开正式版本，并按以下顺序执行：
+安装 `2026.8.2-zh-cn.10` 或更高版本后，后续版本可在管理页面“系统更新”区域点击“一键更新全部”。每个正式镜像同时包含对应的中文管理界面和 cloudflared 内核，二者不会拆开升级。系统只接受本项目 GitHub 最新公开正式版本，并按以下顺序执行：
 
 1. 核对 GitHub 最新公开 Release。
 2. 下载对应的多架构正式镜像，下载期间隧道保持运行。
@@ -172,7 +173,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.10 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.11 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。

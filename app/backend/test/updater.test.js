@@ -48,6 +48,7 @@ test('新容器使用固定镜像、安全配置和受限挂载', () => {
         'APP_VERSION=2026.8.2-zh-cn.9',
         'WEBUI_PORT=14333',
         'PROTOCOL=http2',
+        'HA_CONNECTIONS=1',
         'WEBUI_SESSION_SECRET=session-secret-that-must-be-preserved',
         'UPDATER_SHARED_SECRET=old-secret-must-not-be-preserved',
         'UNRELATED_DANGEROUS_ENV=drop-me',
@@ -70,6 +71,7 @@ test('新容器使用固定镜像、安全配置和受限挂载', () => {
   assert.equal(config.HostConfig.Binds.some(value => value.includes('/host-etc')), false);
   assert.equal(config.Env.includes('APP_VERSION=2026.8.2-zh-cn.9'), false);
   assert.equal(config.Env.includes('UNRELATED_DANGEROUS_ENV=drop-me'), false);
+  assert.equal(config.Env.includes('HA_CONNECTIONS=1'), true);
   assert.equal(config.Env.includes(`UPDATER_SHARED_SECRET=${secret}`), true);
   assert.equal(readContainerVersion(inspect), '2026.8.2-zh-cn.9');
 });
