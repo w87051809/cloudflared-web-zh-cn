@@ -50,6 +50,7 @@ jobs:
           grep -Fqx "ENV VERSION=$CORE_VERSION" Dockerfile
           grep -Fqx "ARG CLOUDFLARED_VERSION=$CORE_VERSION" Dockerfile
           grep -Fq "refs/tags/$CORE_VERSION" Dockerfile
+          grep -Fqx "VERSION='$IMAGE_VERSION'" install.sh
           if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$IMAGE_VERSION" ]]; then
             echo "Release tag $GITHUB_REF_NAME does not match VERSION $IMAGE_VERSION" >&2
             exit 1
@@ -65,6 +66,10 @@ jobs:
           node --check update-auth.js
           node --check updater-client.js
           node --check updater.js
+          node --check installer.js
+      - name: Check installer shell
+        shell: sh
+        run: sh -n install.sh
       - name: Build frontend
         working-directory: app/frontend
         run: |
@@ -229,6 +234,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare verified installer assets
+        shell: bash
+        run: sha256sum install.sh > install.sh.sha256
       - name: Publish verified release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -237,7 +247,10 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $RELEASE_TAG already exists."
+            gh release upload "$RELEASE_TAG" install.sh install.sh.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            echo "Release $RELEASE_TAG already exists; installer assets were refreshed."
             exit 0
           fi
           gh release create "$RELEASE_TAG" \
@@ -245,4 +258,6 @@ jobs:
             --verify-tag \
             --latest \
             --generate-notes \
-            --title "$RELEASE_TAG"
+            --title "$RELEASE_TAG" \
+            install.sh \
+            install.sh.sha256
