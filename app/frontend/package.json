@@ -1,7 +1,7 @@
 {
   "name": "cloudflared-web-zh-cn-frontend",
   "private": true,
-  "version": "2026.8.2-zh-cn.12",
+  "version": "2026.8.2-zh-cn.13",
   "description": "Cloudflared-web 中文版前端界面",
   "license": "GPL-2.0-only",
   "type": "module",

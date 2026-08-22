@@ -35,7 +35,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.12` |
+| 中文定制版 | `2026.8.2-zh-cn.13` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -52,41 +52,47 @@
 
 ## 部署
 
-### 1. 创建环境变量文件
+### 推荐：经过校验的统一安装器
 
-复制环境变量模板并修改其中的账号、密码和会话密钥：
+使用 `root` 登录 Linux、OpenWrt 或 iStoreOS，执行下面这一条命令。命令会下载正式 Release 中的安装器和校验文件，校验通过后才开始安装：
+
+```bash
+cd /tmp && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.2-zh-cn.13/install.sh && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.2-zh-cn.13/install.sh.sha256 && sha256sum -c install.sh.sha256 && sh ./install.sh
+```
+
+统一安装器会一次完成以下工作：
+
+- 同时部署 `cloudflared-web` 管理服务和 `cloudflared-web-updater` 更新服务。
+- 自动生成独立的会话密钥和更新通信密钥，不把密钥上传到仓库。
+- 发现旧的单容器安装时，保留原 `/config`、Tunnel Token、账号密码和 cloudflared 数据后自动迁移。
+- 重复执行时检查现有安装，不会重复创建第二个 cloudflared 隧道实例。
+- 核对镜像版本、GitHub 来源和镜像摘要，拒绝未知镜像及版本降级。
+- 新服务检查失败时恢复旧容器；安装记录和保留项统一放在 `/www/临时文件`。
+
+安装完成后的管理地址：
+
+```text
+http://设备IP:14333
+```
+
+### 高级：Docker Compose 部署
+
+需要自行管理 Compose 的用户，可以复制环境变量模板和双服务配置：
 
 ```bash
 cp .env.example .env
+cp docker-compose.example.yml docker-compose.yml
 ```
 
-`.env` 文件格式如下：
-
-```dotenv
-CLOUDFLARED_WEB_USER=admin
-CLOUDFLARED_WEB_PASSWORD=123456789
-CLOUDFLARED_WEB_SESSION_SECRET=请替换为至少32位的随机字符
-CLOUDFLARED_WEB_UPDATER_SECRET=请替换为另一组至少32位的随机字符
-```
-
-不要将 `.env`、Tunnel Token、证书或私钥提交到仓库。
-
-### 2. 使用 Docker Compose 启动
-
-仓库提供的 `docker-compose.example.yml` 同时部署管理服务和独立更新服务。先复制为正式配置，再启动：
+编辑 `.env`，把两个示例密钥替换为不同的随机值，然后启动：
 
 ```bash
-cp docker-compose.example.yml docker-compose.yml
 docker compose up -d
 ```
 
-更新服务只通过本机 Unix Socket 接收签名请求。Web 管理容器不会挂载 Docker Socket；只有不开放网络端口的独立更新容器可以访问 Docker 管理接口。
+必须同时保留 Compose 文件中的 `cloudflared-web` 和 `cloudflared-web-updater` 两项服务。只启动第一个容器时，管理页面会显示“更新服务未启用”。不要将 `.env`、Tunnel Token、证书或私钥提交到仓库。
 
-管理地址：
-
-```text
-http://路由器IP:14333
-```
+更新服务只通过本机 Unix Socket 接收签名请求。Web 管理容器不会挂载 Docker Socket；只有不开放管理端口的独立更新容器可以访问 Docker 管理接口。
 
 使用默认账号和密码登录后，先按页面要求更换登录信息，再从 Cloudflare Zero Trust 控制台复制 Tunnel Token，在管理页面保存并启动隧道。
 
@@ -150,7 +156,7 @@ Cloudflare 控制台中的“副本”表示 cloudflared 运行实例，本项�
 
 正式发布前，流水线会核对发布版本、镜像中的管理版本和 cloudflared 内核版本是否一致；不一致时停止发布。该功能不会更新 iStoreOS、OpenWrt 或 Linux 系统内核。
 
-首次从旧版本升级到 `2026.8.2-zh-cn.10`，需要先按部署章节加入独立更新服务。以后才可以直接使用页面的一键更新。
+旧的单容器安装只需执行一次统一安装器，原配置会自动迁移并补齐更新服务。以后可以直接使用页面的一键更新，不需要再次逐台补装。
 
 命令行更新仍然保留：
 
@@ -174,7 +180,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.12 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.13 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。

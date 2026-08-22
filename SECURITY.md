@@ -12,5 +12,7 @@
 - 登录会话可在退出时立即吊销，敏感接口禁止缓存并校验同源 JSON 请求。
 - Web 管理容器不挂载 Docker Socket，更新通信目录也以只读方式挂载。一键更新由独立容器执行，只监听本机 Unix Socket，请求使用短时效 HMAC 签名并防止重放。
 - 更新服务只允许操作名为 `cloudflared-web` 的主容器，并且只接受本项目 GitHub 最新公开正式版本；不能通过网页指定镜像仓库、容器或命令。
+- 统一安装器以一次性、无独立管理端口的容器运行。安装器固定镜像仓库和容器名称，核对版本、来源标签及镜像摘要，只迁移 `/config`、`/root/.cloudflared` 和更新通信目录，不继承其他主机挂载或未知环境变量。
+- 正式 Release 同时提供 `install.sh.sha256`；从公网下载安装器时，必须先通过 SHA-256 校验再使用 `root` 执行。
 - 怀疑 Token 泄露时，应立即在 Cloudflare Zero Trust 后台更换令牌。
 - 安全问题请使用 GitHub Security Advisory 私下报告。

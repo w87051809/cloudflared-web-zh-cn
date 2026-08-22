@@ -40,7 +40,7 @@ RUN set -eu; \
 FROM gcr.io/distroless/nodejs22-debian13@sha256:c2753c8b3754b5bde34c1bbbaaa81b2e3ddd67604a867c3521257241f281ce0f
 
 ENV VERSION=2026.8.2
-ENV APP_VERSION=2026.8.2-zh-cn.12
+ENV APP_VERSION=2026.8.2-zh-cn.13
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=14333
@@ -54,7 +54,7 @@ USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.12" \
+      org.opencontainers.image.version="2026.8.2-zh-cn.13" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0-only"
 
@@ -67,10 +67,8 @@ COPY --chown=0:0 \
   app/backend/update-auth.js \
   app/backend/updater-client.js \
   app/backend/updater.js \
+  app/backend/installer.js \
   /var/app/backend/
 COPY --from=frontend-builder --chown=0:0 /build/dist /var/app/frontend/dist
-
-VOLUME /config
-VOLUME /root/.cloudflared
 
 ENTRYPOINT ["/nodejs/bin/node", "/var/app/backend/app.js"]
