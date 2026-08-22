@@ -34,14 +34,6 @@ function resolveExecutable(command) {
   return '';
 }
 
-function normalizeHaConnections(value) {
-  const text = String(value || '').trim();
-  if (!/^[1-4]$/.test(text)) {
-    throw new Error('Cloudflared error: HA_CONNECTIONS 必须是 1 至 4 的整数');
-  }
-  return text;
-}
-
 function buildTunnelArgs(additionalArgs = {}, token = '') {
   const args = ['tunnel', '--no-autoupdate'];
   if (additionalArgs.configPath) args.push('--config', additionalArgs.configPath);
@@ -52,9 +44,6 @@ function buildTunnelArgs(additionalArgs = {}, token = '') {
   if (additionalArgs.region) args.push('--region', additionalArgs.region);
   if (additionalArgs.retries) args.push('--retries', additionalArgs.retries);
   if (additionalArgs.protocol) args.push('--protocol', additionalArgs.protocol);
-  if (additionalArgs.haConnections) {
-    args.push('--ha-connections', normalizeHaConnections(additionalArgs.haConnections));
-  }
   args.push('run', '--token', token);
   return args;
 }
@@ -122,4 +111,4 @@ class CloudflaredTunnel {
   }
 }
 
-module.exports = { buildTunnelArgs, CloudflaredTunnel, normalizeHaConnections };
+module.exports = { buildTunnelArgs, CloudflaredTunnel };

@@ -7,7 +7,7 @@ const tmp = require('tmp');
 const { createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
-const { CloudflaredTunnel, normalizeHaConnections } = require('./cloudflare-tunnel.js');
+const { CloudflaredTunnel } = require('./cloudflare-tunnel.js');
 const { callUpdater, isUpdaterConfigured } = require('./updater-client.js');
 
 const app = express();
@@ -22,7 +22,7 @@ const cloudflaredconfigdir = '/root/.cloudflared';
 const cloudflaredconfigpath = `${cloudflaredconfigdir}/config.yml`;
 const viewpath = path.normalize(__dirname + '/../frontend/dist');
 const appVersion = String(process.env.APP_VERSION || require('./package.json').version);
-const haConnections = normalizeHaConnections(process.env.HA_CONNECTIONS || '1');
+const cloudflareDefaultEdgeConnections = '4';
 const defaultAuthUser = 'admin';
 const defaultAuthPassword = '123456789';
 const initialAuthUser = String(process.env.BASIC_AUTH_USER || defaultAuthUser);
@@ -248,7 +248,7 @@ app.get('/details', (req, res) => {
     desired_start: Boolean(config.start),
     tunnel_id: parseTunnelId(config.token),
     protocol: process.env.PROTOCOL || 'auto',
-    ha_connections: haConnections,
+    ha_connections: cloudflareDefaultEdgeConnections,
     edge_ip_version: process.env.EDGE_IP_VERSION || 'auto',
     webui_port: String(port),
   });
@@ -497,7 +497,6 @@ function init(config) {
   if (process.env.RETRIES) additionalArgs.retries = process.env.RETRIES;
   if (process.env.EDGE_IP_VERSION) additionalArgs.edgeIpVersion = process.env.EDGE_IP_VERSION;
   if (process.env.PROTOCOL) additionalArgs.protocol = process.env.PROTOCOL;
-  additionalArgs.haConnections = haConnections;
   if (fs.existsSync(cloudflaredconfigpath)) {
     fs.chmodSync(cloudflaredconfigpath, 0o600);
     additionalArgs.configPath = cloudflaredconfigpath;
