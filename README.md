@@ -35,7 +35,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.11` |
+| 中文定制版 | `2026.8.2-zh-cn.12` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -108,13 +108,14 @@ http://路由器IP:14333
 | `UPDATER_SHARED_SECRET` | 随机值 | Web 管理服务与独立更新服务之间的签名密钥，至少 32 个字节 |
 | `UPDATER_SOCKET_PATH` | `/run/cloudflared-web-updater/updater.sock` | 本机更新通信路径，不开放 TCP 端口 |
 | `PROTOCOL` | `auto` | 隧道连接协议：`auto`、`http2` 或 `quic` |
-| `HA_CONNECTIONS` | `1` | 单个 cloudflared 实例建立的 Cloudflare 边缘连接数，默认固定为 1 条 |
 | `EDGE_IP_VERSION` | `auto` | Cloudflare 边缘连接 IP 版本：`auto`、`4` 或 `6` |
 | `EDGE_BIND_ADDRESS` | 空 | 指定隧道连接使用的本地源地址 |
 | `METRICS_ENABLE` | `false` | 是否启用 cloudflared 指标服务 |
 | `METRICS_PORT` | `60123` | 指标服务监听端口 |
 
 部分运营商线路会限制 QUIC 使用的 UDP 7844。出现隧道连接不稳定时，可以将 `PROTOCOL` 固定为 `http2`。
+
+Cloudflare 控制台中的“副本”表示 cloudflared 运行实例，本项目默认只运行一个实例；每个实例内部仍由 cloudflared 建立 4 条边缘容灾连接。副本数和内部连接数不是一回事，不能通过压缩内部连接来删除副本，否则控制台会显示“降级”。
 
 如果为本管理页面配置 Cloudflare Tunnel 路由，源服务必须填写 `http://127.0.0.1:14333` 或 `http://localhost:14333`，不要填写路由器的局域网 IP。这样首次默认信息只能由可信局域网用户修改，公网请求会按真实来源拦截。
 
@@ -173,7 +174,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.11 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.12 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。
