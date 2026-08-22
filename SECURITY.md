@@ -10,5 +10,7 @@
 - 正式镜像使用最小化 Distroless 运行环境，cloudflared 从校验后的官方标签源码使用已修复 Go 工具链构建。
 - 发布前会扫描每种架构的实际镜像摘要，并阻止带有可修复高危或严重漏洞的镜像发布。
 - 登录会话可在退出时立即吊销，敏感接口禁止缓存并校验同源 JSON 请求。
+- Web 管理容器不挂载 Docker Socket，更新通信目录也以只读方式挂载。一键更新由独立容器执行，只监听本机 Unix Socket，请求使用短时效 HMAC 签名并防止重放。
+- 更新服务只允许操作名为 `cloudflared-web` 的主容器，并且只接受本项目 GitHub 最新公开正式版本；不能通过网页指定镜像仓库、容器或命令。
 - 怀疑 Token 泄露时，应立即在 Cloudflare Zero Trust 后台更换令牌。
 - 安全问题请使用 GitHub Security Advisory 私下报告。

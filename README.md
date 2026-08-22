@@ -16,6 +16,7 @@
 - 登录失败次数限制和会话有效期管理
 - Tunnel Token 本地持久化与前端脱敏
 - 隧道启动、停止及实时运行参数查看
+- 管理页面一键更新中文界面与 cloudflared 内核、更新前保留旧版及失败自动回退
 - `HTTP/2`、`QUIC` 和自动协议选择
 - `linux/amd64`、`linux/arm64`、`linux/arm/v7` 多架构镜像
 - 固定版本镜像和 `latest` 镜像发布
@@ -34,7 +35,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.2-zh-cn.9` |
+| 中文定制版 | `2026.8.2-zh-cn.10` |
 | cloudflared | `2026.8.2` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -65,45 +66,21 @@ cp .env.example .env
 CLOUDFLARED_WEB_USER=admin
 CLOUDFLARED_WEB_PASSWORD=123456789
 CLOUDFLARED_WEB_SESSION_SECRET=请替换为至少32位的随机字符
+CLOUDFLARED_WEB_UPDATER_SECRET=请替换为另一组至少32位的随机字符
 ```
 
 不要将 `.env`、Tunnel Token、证书或私钥提交到仓库。
 
 ### 2. 使用 Docker Compose 启动
 
-```yaml
-services:
-  cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.9
-    container_name: cloudflared-web
-    restart: unless-stopped
-    network_mode: host
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=16m
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      WEBUI_HOST: 0.0.0.0
-      WEBUI_PORT: 14333
-      BASIC_AUTH_USER: ${CLOUDFLARED_WEB_USER:-admin}
-      BASIC_AUTH_PASS: ${CLOUDFLARED_WEB_PASSWORD:-123456789}
-      WEBUI_SESSION_SECRET: ${CLOUDFLARED_WEB_SESSION_SECRET:?请先在 .env 设置会话密钥}
-      WEBUI_SESSION_HOURS: 12
-      WEBUI_COOKIE_SECURE: auto
-      WEBUI_TRUST_PROXY: "true"
-      PROTOCOL: http2
-      EDGE_IP_VERSION: auto
-    volumes:
-      - ./config:/config
-      - ./config/cloudflared:/root/.cloudflared
-```
-
-启动服务：
+仓库提供的 `docker-compose.example.yml` 同时部署管理服务和独立更新服务。先复制为正式配置，再启动：
 
 ```bash
+cp docker-compose.example.yml docker-compose.yml
 docker compose up -d
 ```
+
+更新服务只通过本机 Unix Socket 接收签名请求。Web 管理容器不会挂载 Docker Socket；只有不开放网络端口的独立更新容器可以访问 Docker 管理接口。
 
 管理地址：
 
@@ -128,6 +105,8 @@ http://路由器IP:14333
 | `WEBUI_COOKIE_SECURE` | `auto` | 根据 HTTP/HTTPS 自动设置安全 Cookie，也可指定 `true` 或 `false` |
 | `WEBUI_TRUST_PROXY` | `false` | 同容器 cloudflared 或本机可信反向代理转发访问时设置为 `true`，仅信任回环代理 |
 | `WEBUI_ALLOW_REMOTE_SETUP` | `false` | 是否允许从公网首次使用默认密码；正式环境不要开启 |
+| `UPDATER_SHARED_SECRET` | 随机值 | Web 管理服务与独立更新服务之间的签名密钥，至少 32 个字节 |
+| `UPDATER_SOCKET_PATH` | `/run/cloudflared-web-updater/updater.sock` | 本机更新通信路径，不开放 TCP 端口 |
 | `PROTOCOL` | `auto` | 隧道连接协议：`auto`、`http2` 或 `quic` |
 | `EDGE_IP_VERSION` | `auto` | Cloudflare 边缘连接 IP 版本：`auto`、`4` 或 `6` |
 | `EDGE_BIND_ADDRESS` | 空 | 指定隧道连接使用的本地源地址 |
@@ -150,6 +129,7 @@ http://路由器IP:14333
 - 写入接口只接受同源 JSON 请求，并统一设置安全响应头和禁止敏感内容缓存。
 - Tunnel Token 仅保存在容器挂载的 `/config/config.json`，管理页面不会返回完整内容。
 - 示例部署启用只读根文件系统、受限临时目录和 `no-new-privileges`。
+- Web 管理容器不接触 Docker Socket；更新权限单独放在无网络管理端口的更新容器中，请求必须经过短时效 HMAC 签名并限制到本项目正式镜像。
 - 运行镜像采用固定摘要的 Distroless Node.js，不包含 npm、curl、Shell 和系统包管理器。
 - cloudflared `2026.8.2` 使用经过 SHA-256 校验的官方标签源码和 Go `1.26.6` 构建，补齐核心运行时安全修复。
 - 发布流水线逐架构扫描实际待发布摘要；存在可修复的高危或严重漏洞时不会发布正式镜像标签。
@@ -159,7 +139,18 @@ http://路由器IP:14333
 
 ## 更新与回滚
 
-建议在生产环境使用明确的版本标签，不直接依赖 `latest`。
+安装 `2026.8.2-zh-cn.10` 后，后续版本可在管理页面“系统更新”区域点击“一键更新全部”。每个正式镜像同时包含对应的中文管理界面和 cloudflared 内核，二者不会拆开升级。系统只接受本项目 GitHub 最新公开正式版本，并按以下顺序执行：
+
+1. 核对 GitHub 最新公开 Release。
+2. 下载对应的多架构正式镜像，下载期间隧道保持运行。
+3. 在 `/www/临时文件` 写入不含密钥的更新记录，并将旧容器改名保留。
+4. 启动新版本并检查管理服务；检查失败时自动恢复旧容器。
+
+正式发布前，流水线会核对发布版本、镜像中的管理版本和 cloudflared 内核版本是否一致；不一致时停止发布。该功能不会更新 iStoreOS、OpenWrt 或 Linux 系统内核。
+
+首次从旧版本升级到 `2026.8.2-zh-cn.10`，需要先按部署章节加入独立更新服务。以后才可以直接使用页面的一键更新。
+
+命令行更新仍然保留：
 
 更新：
 
@@ -174,14 +165,14 @@ docker compose up -d
 docker compose up -d
 ```
 
-更新前应备份 `/config` 挂载目录，并确认 Tunnel Token 和启动状态文件完整。
+一键更新不会删除旧版容器和 `/config`。如果需要手工回滚，可停止当前容器，将保留的 `cloudflared-web-before-auto-update-*` 容器改回 `cloudflared-web` 后启动。
 
 ## 从源码构建
 
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.9 .
+  -t cloudflared-web-zh-cn:2026.8.2-zh-cn.10 .
 ```
 
 Dockerfile 会从 Cloudflare 官方发布地址下载对应架构的软件包并进行 SHA-256 校验。

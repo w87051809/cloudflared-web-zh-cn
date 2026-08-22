@@ -8,6 +8,7 @@ const { createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } = require
 const { execFileSync } = require('node:child_process');
 
 const { CloudflaredTunnel } = require('./cloudflare-tunnel.js');
+const { callUpdater, isUpdaterConfigured } = require('./updater-client.js');
 
 const app = express();
 const cloudflaredPath = process.env.CLOUDFLARED_BIN || (process.platform === 'win32' ? 'cloudflared' : '/usr/local/bin/cloudflared');
@@ -268,11 +269,66 @@ app.get('/new-version', asyncRoute(async (req, res) => {
   } catch (error) {
     console.warn('VERSION: 无法读取远程版本，继续使用当前版本。');
   }
+  const updateAvailable = isNewerAppVersion(latestVersion, currentVersion);
+  if (!updateAvailable && latestVersion !== currentVersion) latestVersion = currentVersion;
   res.status(200).json({
     current_version: currentVersion,
     latest_version: latestVersion,
-    update: isNewerAppVersion(latestVersion, currentVersion),
+    update: updateAvailable,
   });
+}));
+
+app.get('/update/status', asyncRoute(async (req, res) => {
+  if (!isUpdaterConfigured()) {
+    return res.status(200).json({
+      enabled: false,
+      status: 'unavailable',
+      message: '当前安装方式还没有启用一键更新服务。',
+    });
+  }
+  try {
+    return res.status(200).json(await callUpdater('status'));
+  } catch (_error) {
+    return res.status(200).json({
+      enabled: false,
+      status: 'unavailable',
+      message: '一键更新服务暂时没有响应。',
+    });
+  }
+}));
+
+const updateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: '更新操作过于频繁，请稍后重试。' },
+});
+
+app.post('/update', updateLimiter, asyncRoute(async (req, res) => {
+  if (!isUpdaterConfigured()) {
+    return res.status(503).json({ message: '一键更新服务尚未安装。' });
+  }
+
+  let latestVersion;
+  try {
+    latestVersion = await getLatestAppVersion(true);
+  } catch (_error) {
+    return res.status(503).json({ message: '暂时无法核对仓库最新版本，请稍后重试。' });
+  }
+  if (!isNewerAppVersion(latestVersion, appVersion)) {
+    return res.status(409).json({ message: '当前已经是最新版本。' });
+  }
+
+  try {
+    const result = await callUpdater('update', { version: latestVersion });
+    return res.status(202).json(result);
+  } catch (error) {
+    const statusCode = error?.statusCode === 409 ? 409 : 503;
+    return res.status(statusCode).json({
+      message: error instanceof Error ? error.message : '一键更新服务暂时不可用。',
+    });
+  }
 }));
 
 app.post('/start', (req, res) => {
@@ -547,9 +603,9 @@ function usesDefaultCredentials() {
   return defaultCredentialsActive;
 }
 
-async function getLatestAppVersion() {
+async function getLatestAppVersion(forceRefresh = false) {
   const now = Date.now();
-  if (latestVersionCache.value && latestVersionCache.expiresAt > now) {
+  if (!forceRefresh && latestVersionCache.value && latestVersionCache.expiresAt > now) {
     return latestVersionCache.value;
   }
   const response = await fetch(
@@ -565,7 +621,9 @@ async function getLatestAppVersion() {
   if (!response.ok) throw new Error(`远程版本接口返回 ${response.status}`);
   const release = await response.json();
   const latestVersion = String(release.tag_name || '').replace(/^v/, '');
-  if (!latestVersion) throw new Error('远程版本内容不完整。');
+  if (release.draft || release.prerelease || !/^\d+\.\d+\.\d+-zh-cn\.\d+$/.test(latestVersion)) {
+    throw new Error('远程版本内容不完整。');
+  }
   latestVersionCache = { value: latestVersion, expiresAt: now + 10 * 60 * 1000 };
   return latestVersion;
 }
@@ -707,7 +765,7 @@ function addSecurityHeaders(req, res, next) {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (/^\/(auth|config|details|version|new-version|start|token|advanced)(\/|$)/.test(req.path.toLowerCase())) {
+  if (/^\/(auth|config|details|version|new-version|update|start|token|advanced)(\/|$)/.test(req.path.toLowerCase())) {
     res.setHeader('Cache-Control', 'no-store');
   }
   if (shouldUseSecureCookie(req)) {

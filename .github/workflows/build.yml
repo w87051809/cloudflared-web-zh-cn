@@ -46,6 +46,10 @@ jobs:
             echo "Invalid VERSION: $IMAGE_VERSION" >&2
             exit 1
           fi
+          CORE_VERSION="${IMAGE_VERSION%%-zh-cn.*}"
+          grep -Fqx "ENV VERSION=$CORE_VERSION" Dockerfile
+          grep -Fqx "ARG CLOUDFLARED_VERSION=$CORE_VERSION" Dockerfile
+          grep -Fq "refs/tags/$CORE_VERSION" Dockerfile
           if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$IMAGE_VERSION" ]]; then
             echo "Release tag $GITHUB_REF_NAME does not match VERSION $IMAGE_VERSION" >&2
             exit 1
@@ -58,6 +62,9 @@ jobs:
           npm test
           node --check app.js
           node --check cloudflare-tunnel.js
+          node --check update-auth.js
+          node --check updater-client.js
+          node --check updater.js
       - name: Build frontend
         working-directory: app/frontend
         run: |
@@ -209,3 +216,33 @@ jobs:
             --tag "$IMAGE_NAME:$DOCKER_TAG" \
             --tag "$IMAGE_NAME:latest"
           docker buildx imagetools inspect "$IMAGE_NAME:$DOCKER_TAG"
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - verify
+      - scan
+      - docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --latest \
+            --generate-notes \
+            --title "$RELEASE_TAG"

@@ -122,6 +122,12 @@ test('认证门禁、同源校验、会话吊销和私密文件权限', async ()
     });
     assert.equal(unlockedConfig.status, 200);
 
+    const updaterStatus = await fetch(`${baseUrl}/update/status`, {
+      headers: { Cookie: secureCookie },
+    });
+    assert.equal(updaterStatus.status, 200);
+    assert.equal((await updaterStatus.json()).enabled, false);
+
     const uppercaseRoute = await fetch(`${baseUrl}/CONFIG`, {
       headers: { Cookie: secureCookie },
     });

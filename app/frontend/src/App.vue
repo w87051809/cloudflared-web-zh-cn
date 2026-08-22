@@ -101,7 +101,7 @@
           </button>
         </form>
 
-        <p class="login-footer">中文定制版 2026.8.2-zh-cn.9 · 仅限授权人员访问</p>
+        <p class="login-footer">中文定制版 2026.8.2-zh-cn.10 · 仅限授权人员访问</p>
       </section>
     </main>
 
@@ -421,6 +421,52 @@
         </form>
       </section>
 
+      <section class="update-panel surface">
+        <div class="update-heading">
+          <div class="section-title update-title">
+            <div class="section-icon"><PackageCheck :size="19" /></div>
+            <div>
+              <h2>系统更新</h2>
+              <p>管理界面和 cloudflared 内核一起更新；切换前保留旧版，失败时自动恢复。</p>
+            </div>
+          </div>
+          <span class="update-state-badge" :class="`update-state-${updaterStatusClass}`">
+            {{ updaterStatusText }}
+          </span>
+        </div>
+
+        <div class="update-body">
+          <dl class="update-versions">
+            <div>
+              <dt>管理版本</dt>
+              <dd class="mono">{{ updateInfo.current_version || '读取中' }}</dd>
+            </div>
+            <div>
+              <dt>当前内核</dt>
+              <dd class="mono">{{ versionNumber }}</dd>
+            </div>
+            <div>
+              <dt>最新正式版</dt>
+              <dd class="mono">{{ updateInfo.latest_version || '尚未读取' }}</dd>
+            </div>
+          </dl>
+
+          <div class="update-action">
+            <p>{{ updater.message || updateSummary }}</p>
+            <button
+              type="button"
+              class="button button-primary update-button"
+              :disabled="updateButtonDisabled"
+              @click="runOneClickUpdate"
+            >
+              <LoaderCircle v-if="updateBusy" class="spin" :size="18" />
+              <Download v-else :size="18" />
+              {{ updateButtonText }}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="guide-panel">
         <div class="guide-heading">
           <BookOpen :size="20" />
@@ -438,7 +484,7 @@
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 2026.8.2-zh-cn.9</span>
+          <span class="build-tag">中文定制版 {{ updateInfo.current_version || '2026.8.2-zh-cn.10' }}</span>
           <span v-if="updateInfo.update" class="update-tip">项目有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">
@@ -464,6 +510,7 @@ import {
   CircleAlert,
   CircleCheck,
   Cloud,
+  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -473,6 +520,7 @@ import {
   LockKeyhole,
   LogIn,
   LogOut,
+  PackageCheck,
   Play,
   RefreshCw,
   Save,
@@ -517,7 +565,9 @@ const details = reactive({
   edge_ip_version: 'auto',
   webui_port: '14333',
 })
-const updateInfo = reactive({ latest_version: '', update: false })
+const updateInfo = reactive({ current_version: '', latest_version: '', update: false })
+const updater = reactive({ enabled: false, status: 'checking', message: '' })
+const updateBusy = ref(false)
 
 const normalizedToken = computed(() => {
   const value = token.value.trim()
@@ -545,6 +595,31 @@ const shortTunnelId = computed(() => {
 const versionNumber = computed(() => version.value.match(/version\s+([^\s]+)/i)?.[1] || version.value || '读取中')
 const protocolLabel = computed(() => ({ auto: '自动选择', http2: 'HTTP/2', quic: 'QUIC' }[details.protocol] || details.protocol))
 const edgeIpLabel = computed(() => ({ auto: '自动选择', '4': '仅 IPv4', '6': '仅 IPv6' }[details.edge_ip_version] || details.edge_ip_version))
+const updateInProgress = computed(() => ['checking', 'downloading', 'installing'].includes(updater.status))
+const updaterStatusClass = computed(() => {
+  if (updateInProgress.value) return 'working'
+  if (updater.status === 'failed') return 'failed'
+  if (updater.enabled) return 'ready'
+  return 'unavailable'
+})
+const updaterStatusText = computed(() => ({
+  working: '正在更新',
+  failed: '更新失败',
+  ready: '更新服务正常',
+  unavailable: '未启用',
+}[updaterStatusClass.value]))
+const updateSummary = computed(() => {
+  if (!updater.enabled) return '当前安装方式还没有启用一键更新服务。'
+  if (updateInfo.update) return `发现新版本 ${updateInfo.latest_version}，可以直接更新。`
+  return '当前已经是最新版本。'
+})
+const updateButtonDisabled = computed(() => updateBusy.value || updateInProgress.value || !updater.enabled || !updateInfo.update)
+const updateButtonText = computed(() => {
+  if (updateBusy.value || updateInProgress.value) return '正在更新'
+  if (!updater.enabled) return '更新服务未启用'
+  if (!updateInfo.update) return '已经是最新版本'
+  return '一键更新全部'
+})
 
 onBeforeMount(bootstrap)
 
@@ -671,17 +746,22 @@ async function loadDetails() {
 async function refreshAll() {
   refreshing.value = true
   try {
-    const [configData, versionText, updateData, profileData] = await Promise.all([
+    const [configData, versionText, updateData, profileData, updaterData] = await Promise.all([
       requestJson('/config'),
       requestText('/version'),
-      requestJson('/new-version').catch(() => ({ latest_version: '', update: false })),
+      requestJson('/new-version').catch(() => ({ current_version: '', latest_version: '', update: false })),
       requestJson('/auth/profile'),
+      requestJson('/update/status').catch(() => ({ enabled: false, status: 'unavailable', message: '一键更新服务暂时没有响应。' })),
     ])
     token.value = ''
     savedTokenPresent.value = Boolean(configData.token_set)
     version.value = versionText.trim()
+    updateInfo.current_version = updateData.current_version || ''
     updateInfo.latest_version = updateData.latest_version || ''
     updateInfo.update = Boolean(updateData.update)
+    updater.enabled = Boolean(updaterData.enabled)
+    updater.status = updaterData.status || (updater.enabled ? 'ready' : 'unavailable')
+    updater.message = updaterData.message || ''
     authProfile.username = profileData.username || ''
     authProfile.default_credentials = Boolean(profileData.default_credentials)
     if (!newUsername.value) newUsername.value = authProfile.username
@@ -741,6 +821,53 @@ async function changeCredentials() {
     credentialNotice.text = error instanceof Error ? error.message : '保存登录信息失败。'
   } finally {
     credentialBusy.value = false
+  }
+}
+
+async function runOneClickUpdate() {
+  if (updateButtonDisabled.value) return
+  updateBusy.value = true
+  updater.status = 'checking'
+  updater.message = '正在核对最新公开版本。'
+  try {
+    const result = await requestJson('/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    updater.enabled = true
+    updater.status = result.status || 'checking'
+    updater.message = result.message || '更新已经开始。'
+    showNotice('success', '更新已经开始。切换服务时页面可能短暂断开，请不要关闭浏览器。')
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 3_000))
+      try {
+        const status = await requestJson('/update/status')
+        updater.enabled = Boolean(status.enabled)
+        updater.status = status.status || 'ready'
+        updater.message = status.message || ''
+        if (updater.status === 'succeeded') {
+          await refreshAll()
+          showNotice('success', updater.message || '新版本已经安装完成。')
+          return
+        }
+        if (updater.status === 'failed') {
+          showNotice('error', updater.message || '更新没有完成，旧版已经恢复。')
+          return
+        }
+      } catch (_error) {
+        updater.status = 'installing'
+        updater.message = '正在切换服务，请稍候。'
+      }
+    }
+    showNotice('error', '等待更新时间较长，请稍后点“刷新状态”查看结果。')
+  } catch (error) {
+    updater.status = 'failed'
+    updater.message = error instanceof Error ? error.message : '无法开始更新。'
+    showNotice('error', updater.message)
+  } finally {
+    updateBusy.value = false
   }
 }
 
@@ -1065,6 +1192,26 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
 .credential-notice { flex: 1 1 auto; margin-top: 0; }
 .credential-button { flex: 0 0 auto; }
 
+.update-panel { margin: 0 26px 20px; padding: 24px 26px; background: linear-gradient(135deg, #fff 0%, #f8fbff 100%); }
+.update-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.update-title { margin-bottom: 0; }
+.update-state-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.update-state-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.update-state-ready { color: #16764d; border-color: #b9dfcd; background: #ebf8f2; }
+.update-state-working { color: #9a5a18; border-color: #ebca9f; background: #fff7eb; }
+.update-state-working::before { animation: pulse 1.1s infinite; }
+.update-state-failed { color: #9b3939; border-color: #ebc0c0; background: #fff1f1; }
+.update-state-unavailable { color: #667589; border-color: #d6dee7; background: #f3f6f9; }
+.update-body { display: grid; grid-template-columns: minmax(560px, 1.3fr) minmax(260px, .7fr); gap: 24px; margin-top: 20px; }
+.update-versions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; overflow: hidden; border: 1px solid #dce5ef; border-radius: 12px; background: #fff; }
+.update-versions > div { min-width: 0; padding: 14px 16px; }
+.update-versions > div + div { border-left: 1px solid #e1e8f0; }
+.update-versions dt { color: #718096; font-size: 11px; }
+.update-versions dd { margin: 6px 0 0; overflow: hidden; color: #25364a; font-size: 12px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.update-action { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 18px; }
+.update-action p { flex: 1 1 auto; margin: 0; color: #66768a; font-size: 12px; line-height: 1.65; }
+.update-button { flex: 0 0 auto; min-width: 138px; }
+
 .guide-panel { margin: 0 26px 24px; padding: 22px 26px; border: 1px solid #d9e4ef; border-radius: 18px; background: linear-gradient(120deg, #eef6ff, #f8fbff); }
 .guide-heading { display: flex; align-items: flex-start; gap: 11px; }
 .guide-heading > svg { margin-top: 2px; color: #2f73b8; }
@@ -1106,6 +1253,8 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
   .credential-fields { grid-template-columns: 1fr; }
   .credential-actions { align-items: stretch; flex-direction: column; }
   .credential-button { width: 100%; }
+  .update-panel { margin: 0 16px 18px; padding: 20px; }
+  .update-body { grid-template-columns: 1fr; gap: 16px; }
   .guide-panel { margin: 0 16px 18px; padding: 20px; }
   .steps { grid-template-columns: 1fr; }
   .footer-bar { align-items: flex-start; flex-direction: column; padding: 17px 20px; }
@@ -1128,6 +1277,9 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); line-height: 1.15; letter-spa
   .eyebrow { font-size: 9px; }
   h1 { font-size: 25px; }
   .control-surface, .detail-surface { padding: 20px; }
+  .update-heading { flex-direction: column; gap: 12px; }
+  .update-action { align-items: stretch; flex-direction: column; gap: 12px; }
+  .update-button { width: 100%; }
   .action-row { flex-direction: column; }
   .button { width: 100%; }
   .footer-bar nav { gap: 11px; }

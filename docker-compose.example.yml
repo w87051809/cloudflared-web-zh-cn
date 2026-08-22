@@ -1,6 +1,6 @@
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.9
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.10
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
@@ -18,6 +18,8 @@ services:
       WEBUI_SESSION_HOURS: 12
       WEBUI_COOKIE_SECURE: auto
       WEBUI_TRUST_PROXY: "true"
+      UPDATER_SHARED_SECRET: ${CLOUDFLARED_WEB_UPDATER_SECRET:?请先在 .env 设置更新服务密钥}
+      UPDATER_SOCKET_PATH: /run/cloudflared-web-updater/updater.sock
       PROTOCOL: http2
       UI_LANGUAGE: zh-CN
     dns:
@@ -26,3 +28,28 @@ services:
     volumes:
       - ./config:/config
       - ./config/cloudflared:/root/.cloudflared
+      - /run/cloudflared-web-updater:/run/cloudflared-web-updater:ro
+    depends_on:
+      - cloudflared-web-updater
+
+  cloudflared-web-updater:
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.10
+    container_name: cloudflared-web-updater
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      UPDATER_SHARED_SECRET: ${CLOUDFLARED_WEB_UPDATER_SECRET:?请先在 .env 设置更新服务密钥}
+      UPDATER_SOCKET_PATH: /run/cloudflared-web-updater/updater.sock
+      UPDATER_BACKUP_ROOT: /www/临时文件
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /run/cloudflared-web-updater:/run/cloudflared-web-updater
+      - /www/临时文件:/www/临时文件
+    entrypoint:
+      - /nodejs/bin/node
+      - /var/app/backend/updater.js
