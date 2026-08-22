@@ -40,12 +40,13 @@ RUN set -eu; \
 FROM gcr.io/distroless/nodejs22-debian13@sha256:c2753c8b3754b5bde34c1bbbaaa81b2e3ddd67604a867c3521257241f281ce0f
 
 ENV VERSION=2026.8.2
-ENV APP_VERSION=2026.8.2-zh-cn.10
+ENV APP_VERSION=2026.8.2-zh-cn.11
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=14333
 ENV METRICS_ENABLE=false
 ENV METRICS_PORT=60123
+ENV HA_CONNECTIONS=1
 ENV CLOUDFLARED_BIN=/usr/local/bin/cloudflared
 
 EXPOSE 14333 60123
@@ -54,7 +55,7 @@ USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.10" \
+      org.opencontainers.image.version="2026.8.2-zh-cn.11" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0-only"
 

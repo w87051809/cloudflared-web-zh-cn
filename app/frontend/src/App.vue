@@ -101,7 +101,7 @@
           </button>
         </form>
 
-        <p class="login-footer">中文定制版 2026.8.2-zh-cn.10 · 仅限授权人员访问</p>
+        <p class="login-footer">中文定制版 2026.8.2-zh-cn.11 · 仅限授权人员访问</p>
       </section>
     </main>
 
@@ -317,6 +317,10 @@
               <dd>{{ protocolLabel }}</dd>
             </div>
             <div class="detail-row">
+              <dt>边缘连接</dt>
+              <dd>{{ details.ha_connections || '1' }} 条</dd>
+            </div>
+            <div class="detail-row">
               <dt>边缘网络 IP</dt>
               <dd>{{ edgeIpLabel }}</dd>
             </div>
@@ -484,7 +488,7 @@
 
       <footer class="footer-bar">
         <div>
-          <span class="build-tag">中文定制版 {{ updateInfo.current_version || '2026.8.2-zh-cn.10' }}</span>
+          <span class="build-tag">中文定制版 {{ updateInfo.current_version || '2026.8.2-zh-cn.11' }}</span>
           <span v-if="updateInfo.update" class="update-tip">项目有新版本 {{ updateInfo.latest_version }}</span>
         </div>
         <nav aria-label="相关链接">
@@ -562,6 +566,7 @@ const details = reactive({
   desired_start: false,
   tunnel_id: '',
   protocol: 'auto',
+  ha_connections: '1',
   edge_ip_version: 'auto',
   webui_port: '14333',
 })

@@ -1,6 +1,6 @@
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.10
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.11
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
@@ -21,6 +21,7 @@ services:
       UPDATER_SHARED_SECRET: ${CLOUDFLARED_WEB_UPDATER_SECRET:?请先在 .env 设置更新服务密钥}
       UPDATER_SOCKET_PATH: /run/cloudflared-web-updater/updater.sock
       PROTOCOL: http2
+      HA_CONNECTIONS: ${CLOUDFLARED_WEB_HA_CONNECTIONS:-1}
       UI_LANGUAGE: zh-CN
     dns:
       - 223.5.5.5
@@ -33,7 +34,7 @@ services:
       - cloudflared-web-updater
 
   cloudflared-web-updater:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.10
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.11
     container_name: cloudflared-web-updater
     restart: unless-stopped
     network_mode: host

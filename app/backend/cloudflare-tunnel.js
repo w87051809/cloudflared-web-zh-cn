@@ -34,6 +34,31 @@ function resolveExecutable(command) {
   return '';
 }
 
+function normalizeHaConnections(value) {
+  const text = String(value || '').trim();
+  if (!/^[1-4]$/.test(text)) {
+    throw new Error('Cloudflared error: HA_CONNECTIONS 必须是 1 至 4 的整数');
+  }
+  return text;
+}
+
+function buildTunnelArgs(additionalArgs = {}, token = '') {
+  const args = ['tunnel', '--no-autoupdate'];
+  if (additionalArgs.configPath) args.push('--config', additionalArgs.configPath);
+  if (additionalArgs.metrics) args.push('--metrics', `0.0.0.0:${additionalArgs.metrics}`);
+  if (additionalArgs.edgeIpVersion) args.push('--edge-ip-version', additionalArgs.edgeIpVersion);
+  if (additionalArgs.edgeBindAddress) args.push('--edge-bind-address', additionalArgs.edgeBindAddress);
+  if (additionalArgs.gracePeriod) args.push('--grace-period', additionalArgs.gracePeriod);
+  if (additionalArgs.region) args.push('--region', additionalArgs.region);
+  if (additionalArgs.retries) args.push('--retries', additionalArgs.retries);
+  if (additionalArgs.protocol) args.push('--protocol', additionalArgs.protocol);
+  if (additionalArgs.haConnections) {
+    args.push('--ha-connections', normalizeHaConnections(additionalArgs.haConnections));
+  }
+  args.push('run', '--token', token);
+  return args;
+}
+
 class CloudflaredTunnel {
   constructor(cloudflaredPath = '/usr/local/bin/cloudflared') {
     this.cloudflaredPath = cloudflaredPath;
@@ -63,16 +88,7 @@ class CloudflaredTunnel {
     }
     if (!this.token) throw new Error('Cloudflared error: Token is not set');
 
-    const args = ['tunnel', '--no-autoupdate'];
-    if (additionalArgs.configPath) args.push('--config', additionalArgs.configPath);
-    if (additionalArgs.metrics) args.push('--metrics', `0.0.0.0:${additionalArgs.metrics}`);
-    if (additionalArgs.edgeIpVersion) args.push('--edge-ip-version', additionalArgs.edgeIpVersion);
-    if (additionalArgs.edgeBindAddress) args.push('--edge-bind-address', additionalArgs.edgeBindAddress);
-    if (additionalArgs.gracePeriod) args.push('--grace-period', additionalArgs.gracePeriod);
-    if (additionalArgs.region) args.push('--region', additionalArgs.region);
-    if (additionalArgs.retries) args.push('--retries', additionalArgs.retries);
-    if (additionalArgs.protocol) args.push('--protocol', additionalArgs.protocol);
-    args.push('run', '--token', this.token);
+    const args = buildTunnelArgs(additionalArgs, this.token);
 
     const safeArgs = [...args];
     safeArgs[safeArgs.length - 1] = '[REDACTED]';
@@ -106,4 +122,4 @@ class CloudflaredTunnel {
   }
 }
 
-module.exports = { CloudflaredTunnel };
+module.exports = { buildTunnelArgs, CloudflaredTunnel, normalizeHaConnections };
