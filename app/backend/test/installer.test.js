@@ -14,7 +14,7 @@ const {
 
 const imageId = `sha256:${'a'.repeat(64)}`;
 const secret = 'installer-unit-test-secret-0123456789-abcdef';
-const targetVersion = '2026.8.3-zh-cn.14';
+const targetVersion = '2026.8.3-zh-cn.16';
 
 test('统一安装器只接受正式中文版本并拒绝错误顺序', () => {
   assert.equal(isAllowedVersion(targetVersion), true);

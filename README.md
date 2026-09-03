@@ -35,7 +35,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.3-zh-cn.14` |
+| 中文定制版 | `2026.8.3-zh-cn.16` |
 | cloudflared | `2026.8.3` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -57,7 +57,7 @@
 使用 `root` 登录 Linux、OpenWrt 或 iStoreOS，执行下面这一条命令。命令会下载正式 Release 中的安装器和校验文件，校验通过后才开始安装：
 
 ```bash
-cd /tmp && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.14/install.sh && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.14/install.sh.sha256 && sha256sum -c install.sh.sha256 && sh ./install.sh
+cd /tmp && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.16/install.sh && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.16/install.sh.sha256 && sha256sum -c install.sh.sha256 && sh ./install.sh
 ```
 
 统一安装器会一次完成以下工作：
@@ -140,7 +140,7 @@ Cloudflare 控制台中的“副本”表示 cloudflared 运行实例，本项�
 - Web 管理容器不接触 Docker Socket；更新权限单独放在无网络管理端口的更新容器中，请求必须经过短时效 HMAC 签名并限制到本项目正式镜像。
 - 运行镜像采用固定摘要的 Distroless Node.js，不包含 npm、curl、Shell 和系统包管理器。
 - cloudflared `2026.8.3` 使用经过 SHA-256 校验的官方标签源码和 Go `1.26.6` 构建，纳入官方 WebSocket 安全修复。
-- 发布流水线逐架构扫描实际待发布摘要；存在可修复的高危或严重漏洞时不会发布正式镜像标签。
+- 合并请求先构建并扫描 amd64 完整候选镜像；正式标签再逐架构扫描实际待发布摘要。存在可修复的高危或严重漏洞时不会发布正式镜像标签。
 - 配置目录、环境变量文件和备份文件应限制为管理员访问。
 
 详细安全说明见 [SECURITY.md](SECURITY.md)。
@@ -180,7 +180,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.3-zh-cn.14 .
+  -t cloudflared-web-zh-cn:2026.8.3-zh-cn.16 .
 ```
 
 Dockerfile 会从 Cloudflare 官方标签下载源码归档，核对固定的 SHA-256 校验值后再构建对应架构的内核。

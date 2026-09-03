@@ -30,6 +30,11 @@ ADD --checksum=sha256:04cd85af52c2c012f08212c878b4c403eadf410865f2356a80f361d475
 
 RUN set -eu; \
     tar -xzf /tmp/cloudflared-source.tar.gz --strip-components=1 -C /src; \
+    go mod edit -require=golang.org/x/crypto@v0.55.0; \
+    go mod edit -require=google.golang.org/grpc@v1.83.1; \
+    go mod download golang.org/x/crypto@v0.55.0 google.golang.org/grpc@v1.83.1; \
+    go mod tidy; \
+    go mod vendor; \
     mkdir -p /out; \
     if [ "$TARGETARCH" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
@@ -37,10 +42,10 @@ RUN set -eu; \
       -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-08-31T09:48:10Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
       -o /out/cloudflared github.com/cloudflare/cloudflared/cmd/cloudflared
 
-FROM gcr.io/distroless/nodejs22-debian13@sha256:c2753c8b3754b5bde34c1bbbaaa81b2e3ddd67604a867c3521257241f281ce0f
+FROM gcr.io/distroless/nodejs22-debian13@sha256:b55ac629fa389f4eb34ec53846bdefa081a9d25381fa1d37415414d623fe10ae
 
 ENV VERSION=2026.8.3
-ENV APP_VERSION=2026.8.3-zh-cn.14
+ENV APP_VERSION=2026.8.3-zh-cn.16
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=14333
@@ -54,7 +59,7 @@ USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.3-zh-cn.14" \
+      org.opencontainers.image.version="2026.8.3-zh-cn.16" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0-only"
 
