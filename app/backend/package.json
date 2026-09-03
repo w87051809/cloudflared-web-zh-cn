@@ -1,6 +1,6 @@
 {
   "name": "cloudflared-web-zh-cn-backend",
-  "version": "2026.8.3-zh-cn.14",
+  "version": "2026.8.3-zh-cn.15",
   "description": "Cloudflared-web 中文版后端服务",
   "main": "app.js",
   "scripts": {

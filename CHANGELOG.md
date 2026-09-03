@@ -2,6 +2,14 @@
 
 本项目采用 `cloudflared版本-zh-cn.修订号` 的版本格式。
 
+## 2026.8.3-zh-cn.15
+
+- 根据正式镜像安全扫描结果，将 cloudflared 使用的 `golang.org/x/crypto` 更新到 `v0.55.0`，修复 SSH 来源地址限制绕过漏洞。
+- 将 `google.golang.org/grpc` 更新到 `v1.83.1`，修复 gRPC 高危漏洞。
+- 更新固定摘要的 Distroless 运行镜像，将 OpenSSL 更新到 Debian 修复版本 `3.5.7-1~deb13u2`。
+- 在合并请求阶段新增 amd64 完整镜像构建和安全扫描，避免有漏洞的候选版本进入 `main` 后才被正式标签拦截。
+- 保留上一版全部功能和 cloudflared `2026.8.3` 内核；三个架构仍须逐一通过镜像扫描后才能发布。
+
 ## 2026.8.3-zh-cn.14
 
 - 将 cloudflared 内核升级到官方正式版 `2026.8.3`。
