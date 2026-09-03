@@ -20,12 +20,12 @@ FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-ARG CLOUDFLARED_VERSION=2026.8.2
+ARG CLOUDFLARED_VERSION=2026.8.3
 
 WORKDIR /src
 
-ADD --checksum=sha256:acdf125b7e872be6e1d13116e8054d27b2c4755760b0cdc3b4ee3910edd37b93 \
-    https://codeload.github.com/cloudflare/cloudflared/tar.gz/refs/tags/2026.8.2 \
+ADD --checksum=sha256:04cd85af52c2c012f08212c878b4c403eadf410865f2356a80f361d475d2fc92 \
+    https://codeload.github.com/cloudflare/cloudflared/tar.gz/refs/tags/2026.8.3 \
     /tmp/cloudflared-source.tar.gz
 
 RUN set -eu; \
@@ -34,13 +34,13 @@ RUN set -eu; \
     if [ "$TARGETARCH" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
       go build -mod=vendor -trimpath \
-      -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-08-14T12:23:25Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
+      -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-08-31T09:48:10Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
       -o /out/cloudflared github.com/cloudflare/cloudflared/cmd/cloudflared
 
 FROM gcr.io/distroless/nodejs22-debian13@sha256:c2753c8b3754b5bde34c1bbbaaa81b2e3ddd67604a867c3521257241f281ce0f
 
-ENV VERSION=2026.8.2
-ENV APP_VERSION=2026.8.2-zh-cn.13
+ENV VERSION=2026.8.3
+ENV APP_VERSION=2026.8.3-zh-cn.14
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=14333
@@ -54,7 +54,7 @@ USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.2-zh-cn.13" \
+      org.opencontainers.image.version="2026.8.3-zh-cn.14" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0-only"
 

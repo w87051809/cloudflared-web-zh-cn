@@ -1,6 +1,6 @@
 services:
   cloudflared-web:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.13
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.3-zh-cn.14
     container_name: cloudflared-web
     restart: unless-stopped
     network_mode: host
@@ -33,7 +33,7 @@ services:
       - cloudflared-web-updater
 
   cloudflared-web-updater:
-    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.2-zh-cn.13
+    image: ghcr.io/w87051809/cloudflared-web-zh-cn:2026.8.3-zh-cn.14
     container_name: cloudflared-web-updater
     restart: unless-stopped
     network_mode: host
