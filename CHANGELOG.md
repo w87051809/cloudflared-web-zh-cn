@@ -2,7 +2,7 @@
 
 本项目采用 `cloudflared版本-zh-cn.修订号` 的版本格式。
 
-## 2026.8.3-zh-cn.15
+## 2026.8.3-zh-cn.16
 
 - 根据正式镜像安全扫描结果，将 cloudflared 使用的 `golang.org/x/crypto` 更新到 `v0.55.0`，修复 SSH 来源地址限制绕过漏洞。
 - 将 `google.golang.org/grpc` 更新到 `v1.83.1`，修复 gRPC 高危漏洞。

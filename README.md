@@ -35,7 +35,7 @@
 
 | 项目 | 当前版本 |
 | --- | --- |
-| 中文定制版 | `2026.8.3-zh-cn.15` |
+| 中文定制版 | `2026.8.3-zh-cn.16` |
 | cloudflared | `2026.8.3` |
 | 默认管理端口 | `14333` |
 | 容器镜像 | `ghcr.io/w87051809/cloudflared-web-zh-cn` |
@@ -57,7 +57,7 @@
 使用 `root` 登录 Linux、OpenWrt 或 iStoreOS，执行下面这一条命令。命令会下载正式 Release 中的安装器和校验文件，校验通过后才开始安装：
 
 ```bash
-cd /tmp && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.15/install.sh && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.15/install.sh.sha256 && sha256sum -c install.sh.sha256 && sh ./install.sh
+cd /tmp && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.16/install.sh && curl -fLO https://github.com/w87051809/cloudflared-web-zh-cn/releases/download/v2026.8.3-zh-cn.16/install.sh.sha256 && sha256sum -c install.sh.sha256 && sh ./install.sh
 ```
 
 统一安装器会一次完成以下工作：
@@ -180,7 +180,7 @@ docker compose up -d
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t cloudflared-web-zh-cn:2026.8.3-zh-cn.15 .
+  -t cloudflared-web-zh-cn:2026.8.3-zh-cn.16 .
 ```
 
 Dockerfile 会从 Cloudflare 官方标签下载源码归档，核对固定的 SHA-256 校验值后再构建对应架构的内核。

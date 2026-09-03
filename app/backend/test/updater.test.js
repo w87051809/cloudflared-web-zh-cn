@@ -36,7 +36,7 @@ test('只接受正式中文版本号', () => {
   assert.equal(isAllowedVersion('../other'), false);
   assert.equal(isAllowedVersion('2026.8.2-rc.1'), false);
   assert.equal(isNewerVersion('2026.8.2-zh-cn.10', '2026.8.2-zh-cn.9'), true);
-  assert.equal(isNewerVersion('2026.8.3-zh-cn.15', '2026.8.3-zh-cn.14'), true);
+  assert.equal(isNewerVersion('2026.8.3-zh-cn.16', '2026.8.3-zh-cn.14'), true);
   assert.equal(isNewerVersion('2026.8.2-zh-cn.9', '2026.8.2-zh-cn.10'), false);
   assert.equal(isNewerVersion('2026.8.2-zh-cn.10', '2026.8.2-zh-cn.10'), false);
 });
