@@ -20,12 +20,12 @@ FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
-ARG CLOUDFLARED_VERSION=2026.8.3
+ARG CLOUDFLARED_VERSION=2026.9.1
 
 WORKDIR /src
 
-ADD --checksum=sha256:04cd85af52c2c012f08212c878b4c403eadf410865f2356a80f361d475d2fc92 \
-    https://codeload.github.com/cloudflare/cloudflared/tar.gz/refs/tags/2026.8.3 \
+ADD --checksum=sha256:e75d9a314ae07ae42564c0d3115b9e33d8a7329d99771951ab7b67144461bd84 \
+    https://codeload.github.com/cloudflare/cloudflared/tar.gz/refs/tags/2026.9.1 \
     /tmp/cloudflared-source.tar.gz
 
 RUN set -eu; \
@@ -39,13 +39,13 @@ RUN set -eu; \
     if [ "$TARGETARCH" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
     CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
       go build -mod=vendor -trimpath \
-      -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-08-31T09:48:10Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
+      -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-09-10T20:52:23Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
       -o /out/cloudflared github.com/cloudflare/cloudflared/cmd/cloudflared
 
-FROM gcr.io/distroless/nodejs22-debian13@sha256:b55ac629fa389f4eb34ec53846bdefa081a9d25381fa1d37415414d623fe10ae
+FROM gcr.io/distroless/nodejs22-debian13@sha256:412a5f8fce490bcff01fc2a73ec43bb62071e1b71dd847eeacaae7b8ecef1dc1
 
-ENV VERSION=2026.8.3
-ENV APP_VERSION=2026.8.3-zh-cn.16
+ENV VERSION=2026.9.1
+ENV APP_VERSION=2026.9.1-zh-cn.17
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=14333
@@ -59,7 +59,7 @@ USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.8.3-zh-cn.16" \
+      org.opencontainers.image.version="2026.9.1-zh-cn.17" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0-only"
 
