@@ -31,8 +31,8 @@ ADD --checksum=sha256:e75d9a314ae07ae42564c0d3115b9e33d8a7329d99771951ab7b671444
 RUN set -eu; \
     tar -xzf /tmp/cloudflared-source.tar.gz --strip-components=1 -C /src; \
     go mod edit -require=golang.org/x/crypto@v0.55.0; \
-    go mod edit -require=google.golang.org/grpc@v1.83.1; \
-    go mod download golang.org/x/crypto@v0.55.0 google.golang.org/grpc@v1.83.1; \
+    go mod edit -require=google.golang.org/grpc@v1.83.2; \
+    go mod download golang.org/x/crypto@v0.55.0 google.golang.org/grpc@v1.83.2; \
     go mod tidy; \
     go mod vendor; \
     mkdir -p /out; \
@@ -45,7 +45,7 @@ RUN set -eu; \
 FROM gcr.io/distroless/nodejs22-debian13@sha256:412a5f8fce490bcff01fc2a73ec43bb62071e1b71dd847eeacaae7b8ecef1dc1
 
 ENV VERSION=2026.9.1
-ENV APP_VERSION=2026.9.1-zh-cn.17
+ENV APP_VERSION=2026.9.1-zh-cn.18
 ENV NODE_ENV=production
 ENV UI_LANGUAGE=zh-CN
 ENV WEBUI_PORT=14333
@@ -59,7 +59,7 @@ USER 0:0
 WORKDIR /var/app
 
 LABEL org.opencontainers.image.title="Cloudflared-web 中文版" \
-      org.opencontainers.image.version="2026.9.1-zh-cn.17" \
+      org.opencontainers.image.version="2026.9.1-zh-cn.18" \
       org.opencontainers.image.source="https://github.com/w87051809/cloudflared-web-zh-cn" \
       org.opencontainers.image.licenses="GPL-2.0-only"
 

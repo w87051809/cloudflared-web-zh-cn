@@ -3,7 +3,7 @@
 set -eu
 umask 077
 
-VERSION='2026.9.1-zh-cn.17'
+VERSION='2026.9.1-zh-cn.18'
 IMAGE="ghcr.io/w87051809/cloudflared-web-zh-cn:${VERSION}"
 INSTALL_ROOT='/opt/cloudflared-web'
 SOCKET_ROOT='/run/cloudflared-web-updater'
