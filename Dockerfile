@@ -42,7 +42,7 @@ RUN set -eu; \
       -ldflags="-s -w -buildid= -X main.Version=$CLOUDFLARED_VERSION -X main.BuildTime=2026-09-10T20:52:23Z -X github.com/cloudflare/cloudflared/metrics.Runtime=virtual" \
       -o /out/cloudflared github.com/cloudflare/cloudflared/cmd/cloudflared
 
-FROM gcr.io/distroless/nodejs22-debian13@sha256:412a5f8fce490bcff01fc2a73ec43bb62071e1b71dd847eeacaae7b8ecef1dc1
+FROM gcr.io/distroless/nodejs22-debian13@sha256:f643bc05bdcf5a8d98442e8a2a5c7a3a4c3a0e3bc4cdc5f10557d47f1ddd5812
 
 ENV VERSION=2026.9.1
 ENV APP_VERSION=2026.9.1-zh-cn.18
